@@ -18,7 +18,7 @@ class Generator(nn.Module):
 
         self.conv1 = nn.ConvTranspose2d(z_dim, 512, 4, stride=1) # 4x4
         self.bn1 = nn.BatchNorm2d(512)
-        self.conv2 = nn.ConvTranspose2d(512, 256, 4, stride=2, padding=(1,1)) # 10
+        self.conv2 = nn.ConvTranspose2d(512, 256, 4, stride=2, padding=(0,0)) # 10
         self.bn2 = nn.BatchNorm2d(256)
         self.conv3 = nn.ConvTranspose2d(256, 128, 4, stride=2, padding=(1,1)) # 20
         self.bn3 = nn.BatchNorm2d(128)
@@ -91,7 +91,7 @@ class Encoder(nn.Module):
         # 5 x 5 x 256
         self.conv5 = SpectralNorm(nn.Conv2d(256, 256, 3, stride=1, padding=(0,0)))
         # 3 x 3 x 256
-        self.fc = SpectralNorm(nn.Linear(3 * 3 * 512, latent_size))
+        self.fc = SpectralNorm(nn.Linear(3 * 3 * 256, latent_size))
 
     def forward(self, x):
         x = nn.LeakyReLU(leak)(self.conv1(x))
