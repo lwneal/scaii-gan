@@ -139,6 +139,7 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
 
         encoder.train()
         generator.train()
+        classifier.train()
         optim_enc.zero_grad()
         optim_gen.zero_grad()
 
@@ -165,9 +166,16 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
         ts.collect('Generated pixel variance', generated.var(0).mean())
         gen_loss.backward()
         optim_gen_gan.step()
-
         ts.collect('Disc Loss', disc_loss)
         ts.collect('Gen Loss', gen_loss)
+
+        # Update classifier
+        optim_class.zero_grad()
+        preds = classifier(encoded)
+        nll_loss = F.nll_loss(preds, labels)
+        ts.collect('Classifier NLL', nll_loss)
+        optim_class.step()
+
         ts.print_every(n_sec=4)
         if i % 100 == 0:
             img_real = format_demo_img(to_np(data[0]))

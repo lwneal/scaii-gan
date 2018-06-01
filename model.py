@@ -118,6 +118,6 @@ class Classifier(nn.Module):
 
     def forward(self, x):
         x = nn.LeakyReLU(leak)(self.fc1(x))
-        x = nn.log_softmax(self.fc2(x))
+        x = F.log_softmax(self.fc2(x))
         return x
 
