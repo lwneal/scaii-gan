@@ -72,6 +72,41 @@ def sample_z(batch_size, z_dim):
     return z.to(device)
 
 
+def format_demo_img(state):
+    # Fill a white background
+    canvas = np.ones((190, 140))
+    canvas[:] = 255.
+    canvas[20:60,  20:60] = state[0]
+    canvas[80:120,  20:60] = state[1]
+    canvas[140:180, 20:60] = state[2]
+
+    canvas[20:60,  80:120] = state[3]
+    canvas[80:120,  80:120] = state[4]
+    canvas[140:180, 80:120] = state[5]
+
+    # Now draw all the text captions
+    from PIL import Image, ImageFont, ImageDraw
+    img = Image.fromarray(canvas.astype('uint8'))
+    FONT_FILE = '/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf'
+    font = ImageFont.truetype(FONT_FILE, 10)
+    draw = ImageDraw.Draw(img)
+
+    def draw_text(x, y, caption):
+        textsize = draw.textsize(caption, font=font)
+        #draw.rectangle([(x, y), textsize], fill=(0,0,0,128))
+        draw.multiline_text((x,y), caption, font=font)
+
+    draw_text(20, 8, "Health")
+    draw_text(20, 68, "Agent")
+    draw_text(20, 128, "Small")
+
+    draw_text(80, 8, "Large")
+    draw_text(80, 68, "Friendly")
+    draw_text(80, 128, "Enemy")
+    canvas = np.array(img)
+    return canvas
+
+
 def train(epoch, ts, max_batches=100, disc_iters=5):
 
     for data, labels in loader:
@@ -126,17 +161,11 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
 
         ts.print_every(n_sec=4)
 
-    # Reconstruct real frames
-    reconstructed = generator(encoder(data))
-
-    reconstructions = []
-    for i in range(8):
-        reconstructions.append(to_np(data[i]))
-        reconstructions.append(to_np(reconstructed[i]))
-    img_recon = np.array(reconstructions)
-    # HACK: Show only the first 3 channels
-    img_recon = img_recon[:,:,:,:3]
-    imutil.show(img_recon, filename='training_reconstruction_epoch_{:05d}.png'.format(epoch))
+    img_real = format_demo_img(to_np(data[0]))
+    img_recon = format_demo_img(to_np(reconstructed[0]))
+    demo_img = np.concatenate([img_real, img_recon], axis=1)
+    filename = 'training_reconstruction_epoch_{:05d}.png'.format(epoch)
+    imutil.show(demo_img, filename=filename)
 
     scheduler_e.step()
     scheduler_d.step()
@@ -145,8 +174,8 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
     print(ts)
 
 
-def to_np(x):
-    return x.detach().cpu().numpy().transpose(1,2,0)
+def to_np(tensor):
+    return tensor.detach().cpu().numpy()
 
 
 fixed_z = sample_z(args.batch_size, Z_dim)
@@ -167,8 +196,8 @@ def evaluate(epoch, img_samples=8):
 
     reconstructions = []
     for i in range(img_samples):
-        reconstructions.append(to_np(real_images[i]))
-        reconstructions.append(to_np(reconstructed[i]))
+        reconstructions.append(to_np(real_images[i]).transpose(1,2,0))
+        reconstructions.append(to_np(reconstructed[i]).transpose(1,2,0))
     img_recon = np.array(reconstructions)
     imutil.show(img_recon, filename='reconstruction_epoch_{:05d}.png'.format(epoch))
 
@@ -223,7 +252,7 @@ def main():
             ts_eval.collect(key, value)
         print(ts_eval)
         """
-        make_video('epoch_{:03d}'.format(epoch))
+        #make_video('epoch_{:03d}'.format(epoch))
 
         torch.save(discriminator.state_dict(), os.path.join(args.checkpoint_dir, 'disc_{}'.format(epoch)))
         torch.save(generator.state_dict(), os.path.join(args.checkpoint_dir, 'gen_{}'.format(epoch)))
