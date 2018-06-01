@@ -22,7 +22,8 @@ print('Parsing arguments')
 parser = argparse.ArgumentParser()
 parser.add_argument('--batch_size', type=int, default=64)
 parser.add_argument('--lr', type=float, default=2e-4)
-parser.add_argument('--checkpoint_dir', type=str, default='checkpoints')
+parser.add_argument('--save_to_dir', type=str, default='checkpoints')
+parser.add_argument('--load_from_dir', type=str, default='checkpoints')
 parser.add_argument('--epochs', type=int, default=10)
 parser.add_argument('--latent_size', type=int, default=4)
 parser.add_argument('--start_epoch', type=int, default=0)
@@ -45,9 +46,9 @@ generator = model.Generator(Z_dim).to(device)
 encoder = model.Encoder(Z_dim).to(device)
 
 if args.start_epoch:
-    generator.load_state_dict(torch.load('checkpoints/gen_{}'.format(args.start_epoch)))
-    encoder.load_state_dict(torch.load('checkpoints/enc_{}'.format(args.start_epoch)))
-    discriminator.load_state_dict(torch.load('checkpoints/disc_{}'.format(args.start_epoch)))
+    generator.load_state_dict(torch.load('{}/gen_{}'.format(args.load_from_dir, args.start_epoch)))
+    encoder.load_state_dict(torch.load('{}/enc_{}'.format(args.load_from_dir, args.start_epoch)))
+    discriminator.load_state_dict(torch.load('{}/disc_{}'.format(args.load_from_dir, args.start_epoch)))
 
 # because the spectral normalization module creates parameters that don't require gradients (u and v), we don't want to 
 # optimize these using sgd. We only let the optimizer operate on parameters that _do_ require gradients
@@ -246,7 +247,7 @@ def make_video(output_video_name):
 
 def main():
     print('creating checkpoint directory')
-    os.makedirs(args.checkpoint_dir, exist_ok=True)
+    os.makedirs(args.save_to_dir, exist_ok=True)
     batches_per_epoch = 100
     ts_train = TimeSeries('Training', batches_per_epoch * args.epochs)
     ts_eval = TimeSeries('Evaluation', args.epochs)
@@ -263,9 +264,9 @@ def main():
         """
         make_video('epoch_{:03d}'.format(epoch))
 
-        torch.save(discriminator.state_dict(), os.path.join(args.checkpoint_dir, 'disc_{}'.format(epoch)))
-        torch.save(generator.state_dict(), os.path.join(args.checkpoint_dir, 'gen_{}'.format(epoch)))
-        torch.save(encoder.state_dict(), os.path.join(args.checkpoint_dir, 'enc_{}'.format(epoch)))
+        torch.save(discriminator.state_dict(), os.path.join(args.save_to_dir, 'disc_{}'.format(epoch)))
+        torch.save(generator.state_dict(), os.path.join(args.save_to_dir, 'gen_{}'.format(epoch)))
+        torch.save(encoder.state_dict(), os.path.join(args.save_to_dir, 'enc_{}'.format(epoch)))
 
 
 if __name__ == '__main__':
