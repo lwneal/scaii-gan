@@ -118,7 +118,6 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
         encoder.eval()
         generator.eval()
 
-        """
         z = sample_z(args.batch_size, Z_dim)
         optim_disc.zero_grad()
         optim_gen.zero_grad()
@@ -130,7 +129,6 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
         optim_disc.step()
         ts.collect('Disc (Real)', d_real.mean())
         ts.collect('Disc (Fake)', d_fake.mean())
-        """
 
         encoder.train()
         generator.train()
@@ -152,7 +150,6 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
         optim_enc.step()
         optim_gen.step()
 
-        """
         # GAN update for realism
         optim_gen_gan.zero_grad()
         z = sample_z(args.batch_size, Z_dim)
@@ -164,17 +161,16 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
 
         ts.collect('Disc Loss', disc_loss)
         ts.collect('Gen Loss', gen_loss)
-        """
         ts.print_every(n_sec=4)
         if i % 100 == 0:
             img_real = format_demo_img(to_np(data[0]))
             img_recon = format_demo_img(to_np(reconstructed[0]))
             demo_img = np.concatenate([img_real, img_recon], axis=1)
-            filename = 'training_reconstruction_{:05d}_{:04d}.png'.format(epoch, i)
+            filename = 'reconstruction_epoch{:03d}_{:04d}.png'.format(epoch, i)
             imutil.show(demo_img, filename=filename)
             generated = generator(sample_z(1, Z_dim))
             gen_img = format_demo_img(to_np(generated[0]))
-            filename = 'training_generated_{:05d}_{:04d}.png'.format(epoch, i)
+            filename = 'generated_epoch{:03d}_{:04d}.png'.format(epoch, i)
             imutil.show(gen_img, filename=filename)
 
     scheduler_e.step()
