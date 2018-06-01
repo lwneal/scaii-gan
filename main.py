@@ -44,11 +44,13 @@ print('Building model...')
 discriminator = model.Discriminator().to(device)
 generator = model.Generator(Z_dim).to(device)
 encoder = model.Encoder(Z_dim).to(device)
+classifier = model.Classifier(Z_dim).to(device)
 
 if args.start_epoch:
     generator.load_state_dict(torch.load('{}/gen_{}'.format(args.load_from_dir, args.start_epoch)))
     encoder.load_state_dict(torch.load('{}/enc_{}'.format(args.load_from_dir, args.start_epoch)))
     discriminator.load_state_dict(torch.load('{}/disc_{}'.format(args.load_from_dir, args.start_epoch)))
+    classifier.load_state_dict(torch.load('{}/class_{}'.format(args.load_from_dir, args.start_epoch)))
 
 # because the spectral normalization module creates parameters that don't require gradients (u and v), we don't want to 
 # optimize these using sgd. We only let the optimizer operate on parameters that _do_ require gradients
@@ -58,12 +60,14 @@ optim_disc = optim.Adam(filter(lambda p: p.requires_grad, discriminator.paramete
 optim_gen = optim.Adam(generator.parameters(), lr=args.lr, betas=(0.0,0.9))
 optim_gen_gan = optim.Adam(generator.parameters(), lr=args.lr, betas=(0.0,0.9))
 optim_enc = optim.Adam(filter(lambda p: p.requires_grad, encoder.parameters()), lr=args.lr, betas=(0.0,0.9))
+optim_class = optim.Adam(classifier.parameters(), lr=args.lr)
 
 # use an exponentially decaying learning rate
 scheduler_d = optim.lr_scheduler.ExponentialLR(optim_disc, gamma=0.99)
 scheduler_g = optim.lr_scheduler.ExponentialLR(optim_gen, gamma=0.99)
 scheduler_g_gan = optim.lr_scheduler.ExponentialLR(optim_gen_gan, gamma=0.99)
 scheduler_e = optim.lr_scheduler.ExponentialLR(optim_enc, gamma=0.99)
+scheduler_c = optim.lr_scheduler.ExponentialLR(optim_enc, gamma=0.99)
 print('Finished building model')
 
 
@@ -241,7 +245,7 @@ def make_video(output_video_name):
         z = normalize_vector(z)
         samples = generator(z)
         pixels = format_demo_img(to_np(samples[0]))
-        v.write_frame(pixels, normalize_color=False, resize_to=None)
+        v.write_frame(pixels, normalize_color=False, resize_to=(380,280))
     v.finish()
 
 
@@ -267,6 +271,7 @@ def main():
         torch.save(discriminator.state_dict(), os.path.join(args.save_to_dir, 'disc_{}'.format(epoch)))
         torch.save(generator.state_dict(), os.path.join(args.save_to_dir, 'gen_{}'.format(epoch)))
         torch.save(encoder.state_dict(), os.path.join(args.save_to_dir, 'enc_{}'.format(epoch)))
+        torch.save(classifier.state_dict(), os.path.join(args.save_to_dir, 'class_{}'.format(epoch)))
 
 
 if __name__ == '__main__':
