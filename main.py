@@ -75,17 +75,17 @@ def sample_z(batch_size, z_dim):
     return z.to(device)
 
 
+
 def format_demo_img(state):
     # Fill a white background
-    canvas = np.ones((190, 140))
-    canvas[:] = 255.
-    canvas[20:60,  20:60] = state[0]
-    canvas[80:120,  20:60] = state[1]
-    canvas[140:180, 20:60] = state[2]
+    canvas = np.ones((190, 140)) * 255
+    canvas[20:60,  20:60] = state[0] * 255.
+    canvas[80:120,  20:60] = state[1] * 255.
+    canvas[140:180, 20:60] = state[2] * 255.
 
-    canvas[20:60,  80:120] = state[3]
-    canvas[80:120,  80:120] = state[4]
-    canvas[140:180, 80:120] = state[5]
+    canvas[20:60,  80:120] = state[3] * 255.
+    canvas[80:120,  80:120] = state[4] * 255.
+    canvas[140:180, 80:120] = state[5] * 255.
 
     # Now draw all the text captions
     from PIL import Image, ImageFont, ImageDraw
@@ -112,12 +112,13 @@ def format_demo_img(state):
 
 def train(epoch, ts, max_batches=100, disc_iters=5):
 
-    for data, labels in loader:
+    for i, (data, labels) in enumerate(loader):
         # update discriminator
         discriminator.train()
         encoder.eval()
         generator.eval()
 
+        """
         z = sample_z(args.batch_size, Z_dim)
         optim_disc.zero_grad()
         optim_gen.zero_grad()
@@ -129,6 +130,7 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
         optim_disc.step()
         ts.collect('Disc (Real)', d_real.mean())
         ts.collect('Disc (Fake)', d_fake.mean())
+        """
 
         encoder.train()
         generator.train()
@@ -142,6 +144,7 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
         reconstruction_loss = F.smooth_l1_loss(reconstructed, data)
 
         reconstruction_loss.backward()
+        ts.collect('Reconst. Loss', reconstruction_loss)
         ts.collect('Z variance', encoded.var(0).mean())
         ts.collect('Reconst. Pixel variance', reconstructed.var(0).mean())
         ts.collect('Z[0] mean', encoded[:,0].mean().item())
@@ -149,6 +152,7 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
         optim_enc.step()
         optim_gen.step()
 
+        """
         # GAN update for realism
         optim_gen_gan.zero_grad()
         z = sample_z(args.batch_size, Z_dim)
@@ -160,15 +164,18 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
 
         ts.collect('Disc Loss', disc_loss)
         ts.collect('Gen Loss', gen_loss)
-        ts.collect('Reconst. Loss', reconstruction_loss)
-
+        """
         ts.print_every(n_sec=4)
-
-    img_real = format_demo_img(to_np(data[0]))
-    img_recon = format_demo_img(to_np(reconstructed[0]))
-    demo_img = np.concatenate([img_real, img_recon], axis=1)
-    filename = 'training_reconstruction_epoch_{:05d}.png'.format(epoch)
-    imutil.show(demo_img, filename=filename)
+        if i % 100 == 0:
+            img_real = format_demo_img(to_np(data[0]))
+            img_recon = format_demo_img(to_np(reconstructed[0]))
+            demo_img = np.concatenate([img_real, img_recon], axis=1)
+            filename = 'training_reconstruction_{:05d}_{:04d}.png'.format(epoch, i)
+            imutil.show(demo_img, filename=filename)
+            generated = generator(sample_z(1, Z_dim))
+            gen_img = format_demo_img(to_np(generated[0]))
+            filename = 'training_generated_{:05d}_{:04d}.png'.format(epoch, i)
+            imutil.show(gen_img, filename=filename)
 
     scheduler_e.step()
     scheduler_d.step()

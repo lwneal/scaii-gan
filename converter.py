@@ -98,7 +98,8 @@ class SkyRTSConverter(Converter):
         channels[3] = img[40:80, 40:80, 0]
         channels[4] = img[80:120, 0:40, 0]
         channels[5] = img[80:120, 40:80, 0]
-        return channels
+        # Normalize to [0, 1]
+        return channels / 255.0
 
     def from_array(self, array):
         return array
