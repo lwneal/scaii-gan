@@ -69,11 +69,13 @@ print('Finished building model')
 def sample_z(batch_size, z_dim):
     # Normal Distribution
     z = torch.randn(batch_size, z_dim)
-    eps = .0001
-    norm = torch.norm(z, p=2, dim=1) + eps
-    z = z / norm.expand(1, -1).t()
+    z = normalize_vector(z)
     return z.to(device)
 
+
+def normalize_vector(x, eps=.0001):
+    norm = torch.norm(x, p=2, dim=1) + eps
+    return x / norm.expand(1, -1).t()
 
 
 def format_demo_img(state):
@@ -232,11 +234,12 @@ def make_video(output_video_name):
     fixed_z = torch.randn(1, Z_dim).to(device)
     fixed_zprime = torch.randn(1, Z_dim).to(device)
     v = imutil.VideoMaker(output_video_name)
-    for i in range(100):
-        theta = abs(i - 50) / 50.
+    for i in range(200):
+        theta = abs(i - 100) / 100.
         z = theta * fixed_z + (1 - theta) * fixed_zprime
-        samples = generator(z).cpu().data.numpy()
-        pixels = samples.transpose((0,2,3,1)) * 255
+        z = normalize_vector(z)
+        samples = generator(z)
+        pixels = format_demo_img(to_np(samples[0]))
         v.write_frame(pixels, normalize_color=False)
     v.finish()
 
@@ -258,7 +261,7 @@ def main():
             ts_eval.collect(key, value)
         print(ts_eval)
         """
-        #make_video('epoch_{:03d}'.format(epoch))
+        make_video('epoch_{:03d}'.format(epoch))
 
         torch.save(discriminator.state_dict(), os.path.join(args.checkpoint_dir, 'disc_{}'.format(epoch)))
         torch.save(generator.state_dict(), os.path.join(args.checkpoint_dir, 'gen_{}'.format(epoch)))
