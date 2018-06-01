@@ -69,6 +69,9 @@ print('Finished building model')
 def sample_z(batch_size, z_dim):
     # Normal Distribution
     z = torch.randn(batch_size, z_dim)
+    eps = .0001
+    norm = torch.norm(z, p=2, dim=1) + eps
+    z = z / norm.expand(1, -1).t()
     return z.to(device)
 
 

@@ -99,4 +99,11 @@ class Encoder(nn.Module):
         x = nn.LeakyReLU(leak)(self.conv3(x))
         x = nn.LeakyReLU(leak)(self.conv4(x))
         x = nn.LeakyReLU(leak)(self.conv5(x))
-        return self.fc(x.view(-1, 3 * 3 * 256))
+        x = self.fc(x.view(-1, 3 * 3 * 256))
+
+        # L2 ball normalization
+        eps = .0001
+        norm = torch.norm(x, p=2, dim=1)
+        x = x / (norm.expand(1, -1).t() + eps)
+
+        return x
