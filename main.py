@@ -142,21 +142,27 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
         classifier.train()
         optim_enc.zero_grad()
         optim_gen.zero_grad()
+        optim_class.zero_grad()
 
         # reconstruct images
         encoded = encoder(data)
         reconstructed = generator(encoded)
         #reconstruction_loss = torch.mean((reconstructed - data)**2)
         reconstruction_loss = F.smooth_l1_loss(reconstructed, data)
-
         reconstruction_loss.backward()
         ts.collect('Reconst. Loss', reconstruction_loss)
         ts.collect('Z variance', encoded.var(0).mean())
         ts.collect('Reconst. Pixel variance', reconstructed.var(0).mean())
         ts.collect('Z[0] mean', encoded[:,0].mean().item())
 
+        # Update classifier
+        preds = classifier(encoded)
+        nll_loss = F.nll_loss(preds, labels)
+        ts.collect('Classifier NLL', nll_loss)
+
         optim_enc.step()
         optim_gen.step()
+        optim_class.step()
 
         # GAN update for realism
         optim_gen_gan.zero_grad()
@@ -168,13 +174,6 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
         optim_gen_gan.step()
         ts.collect('Disc Loss', disc_loss)
         ts.collect('Gen Loss', gen_loss)
-
-        # Update classifier
-        optim_class.zero_grad()
-        preds = classifier(encoded)
-        nll_loss = F.nll_loss(preds, labels)
-        ts.collect('Classifier NLL', nll_loss)
-        optim_class.step()
 
         ts.print_every(n_sec=4)
         if i % 100 == 0:
