@@ -241,7 +241,7 @@ def make_video(output_video_name):
         z = normalize_vector(z)
         samples = generator(z)
         pixels = format_demo_img(to_np(samples[0]))
-        v.write_frame(pixels, normalize_color=False)
+        v.write_frame(pixels, normalize_color=False, resize_to=None)
     v.finish()
 
 
