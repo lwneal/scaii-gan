@@ -203,40 +203,27 @@ def evaluate(epoch, img_samples=8):
     encoder.eval()
     generator.eval()
     discriminator.eval()
+    classifier.eval()
 
     samples = generator(fixed_z).cpu().data.numpy()
 
-    eval_loader = AtariDataloader(batch_size=args.batch_size)
-    real_images, _ = next(eval_loader)
-    real_images = real_images.to(device)
-
-    # Reconstruct real frames
-    reconstructed = generator(encoder(real_images))
-    reconstruction_l2 = torch.mean((reconstructed - real_images) ** 2).item()
-
-    reconstructions = []
-    for i in range(img_samples):
-        reconstructions.append(to_np(real_images[i]).transpose(1,2,0))
-        reconstructions.append(to_np(reconstructed[i]).transpose(1,2,0))
-    img_recon = np.array(reconstructions)
-    imutil.show(img_recon, filename='reconstruction_epoch_{:05d}.png'.format(epoch))
+    # TODO: Reconstruct real frames
+    #reconstructed = generator(encoder(real_images))
+    #reconstruction_l2 = torch.mean((reconstructed - real_images) ** 2).item()
 
     # Reconstruct generated frames
     reconstructed = generator(encoder(generator(fixed_z)))
-    cycle_reconstruction_l2 = torch.mean((real_images - reconstructed) ** 2).item()
+    cycle_reconstruction_l2 = torch.mean((generator(fixed_z) - reconstructed) ** 2).item()
 
     # TODO: Measure "goodness" of generated images
 
     # TODO: Measure disentanglement of latent codes
 
-    # Generate images
-    img = samples[:img_samples].transpose((0,2,3,1))
-    imutil.show(img, filename='gen_epoch_{:05d}.png'.format(epoch))
+    # TODO: Generate images
 
     return {
         'generated_pixel_mean': samples.mean(),
         'generated_pixel_variance': samples.var(0).mean(),
-        'reconstruction_l2': reconstruction_l2,
         'cycle_reconstruction_l2': cycle_reconstruction_l2,
     }
 
@@ -267,12 +254,10 @@ def main():
         train(epoch, ts_train, batches_per_epoch)
         print(ts_train)
 
-        """
         metrics = evaluate(epoch)
         for key, value in metrics.items():
             ts_eval.collect(key, value)
         print(ts_eval)
-        """
         make_video('epoch_{:03d}'.format(epoch))
 
         torch.save(discriminator.state_dict(), os.path.join(args.save_to_dir, 'disc_{}'.format(epoch)))
