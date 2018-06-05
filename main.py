@@ -24,7 +24,7 @@ parser.add_argument('--batch_size', type=int, default=64)
 parser.add_argument('--lr', type=float, default=2e-4)
 parser.add_argument('--save_to_dir', type=str, default='checkpoints')
 parser.add_argument('--load_from_dir', type=str, default='checkpoints')
-parser.add_argument('--epochs', type=int, default=10)
+parser.add_argument('--epochs', type=int, default=100)
 parser.add_argument('--latent_size', type=int, default=4)
 parser.add_argument('--start_epoch', type=int, default=0)
 parser.add_argument('--lambda_gan', type=float, default=0.1)
@@ -205,9 +205,9 @@ def evaluate(epoch, img_samples=8):
     # Generate some sample frames, measure mode collapse
     samples = generator(fixed_z).cpu().data.numpy()
 
-    # TODO: Reconstruct real frames
-    #reconstructed = generator(encoder(real_images))
-    #reconstruction_l2 = torch.mean((reconstructed - real_images) ** 2).item()
+    # Reconstruct real frames
+    reconstructed = generator(encoder(data))
+    reconstruction_l2 = torch.mean((reconstructed - data) ** 2).item()
 
     # Reconstruct generated frames
     reconstructed = generator(encoder(generator(fixed_z)))
@@ -218,6 +218,7 @@ def evaluate(epoch, img_samples=8):
     demo_img = np.concatenate([img_real, img_recon], axis=1)
     filename = 'reconstruction_epoch_{:03d}.png'.format(epoch)
     imutil.show(demo_img, filename=filename)
+
     generated = generator(sample_z(1, Z_dim))
     gen_img = format_demo_img(to_np(generated[0]))
     filename = 'generated_epoch_{:03d}.png'.format(epoch)
@@ -237,6 +238,7 @@ def evaluate(epoch, img_samples=8):
     return {
         'generated_pixel_mean': samples.mean(),
         'generated_pixel_variance': samples.var(0).mean(),
+        'reconstruction_l2': reconstruction_l2,
         'cycle_reconstruction_l2': cycle_reconstruction_l2,
         'train_accuracy': train_accuracy,
     }
