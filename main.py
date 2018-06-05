@@ -24,7 +24,7 @@ parser.add_argument('--batch_size', type=int, default=64)
 parser.add_argument('--lr', type=float, default=2e-4)
 parser.add_argument('--save_to_dir', type=str, default='checkpoints')
 parser.add_argument('--load_from_dir', type=str, default='checkpoints')
-parser.add_argument('--epochs', type=int, default=100)
+parser.add_argument('--epochs', type=int, default=25)
 parser.add_argument('--latent_size', type=int, default=4)
 parser.add_argument('--start_epoch', type=int, default=0)
 parser.add_argument('--lambda_gan', type=float, default=0.1)
@@ -136,37 +136,39 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
         ts.collect('Disc Loss', disc_loss)
         ts.collect('Disc (Real)', d_real.mean())
         ts.collect('Disc (Fake)', d_fake.mean())
-
         disc_loss.backward()
         optim_disc.step()
 
         encoder.train()
         generator.train()
         classifier.train()
+
+        # Reconstruct pixels
         optim_enc.zero_grad()
         optim_gen.zero_grad()
         optim_class.zero_grad()
-
-        # Reconstruct pixels with Huber loss
         encoded = encoder(data)
         reconstructed = generator(encoded)
+        # Huber loss
         reconstruction_loss = F.smooth_l1_loss(reconstructed, data)
         ts.collect('Reconst. Loss', reconstruction_loss)
         ts.collect('Z variance', encoded.var(0).mean())
         ts.collect('Reconst. Pixel variance', reconstructed.var(0).mean())
         ts.collect('Z[0] mean', encoded[:,0].mean().item())
-
-        # Classifier outputs linear scores (logits)
-        preds = F.log_softmax(classifier(encoded))
-        nll_loss = F.nll_loss(preds, labels)
-        ts.collect('Classifier NLL', nll_loss)
-
-        loss = reconstruction_loss + nll_loss
-        loss.backward()
-
+        reconstruction_loss.backward()
         optim_enc.step()
         optim_gen.step()
+
+        # Update classifier
+        optim_enc.zero_grad()
+        optim_class.zero_grad()
+        # Classifier outputs linear scores (logits)
+        preds = F.log_softmax(classifier(encoder(data)))
+        nll_loss = F.nll_loss(preds, labels)
+        ts.collect('Classifier NLL', nll_loss)
+        nll_loss.backward()
         optim_class.step()
+        optim_enc.step()
 
         # GAN update for realism
         optim_gen_gan.zero_grad()
@@ -175,7 +177,6 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
         gen_loss = -discriminator(generated).mean() * args.lambda_gan
         ts.collect('Generated pixel variance', generated.var(0).mean())
         ts.collect('Gen Loss', gen_loss)
-
         gen_loss.backward()
         optim_gen_gan.step()
 
@@ -233,7 +234,7 @@ def evaluate(epoch, img_samples=8):
     # Test classifier
     scores = F.log_softmax(classifier(encoder(data)))
     correct = (scores.max(dim=1)[1] == labels).sum()
-    train_accuracy = correct / len(labels)
+    train_accuracy = float(correct) / len(labels)
 
     return {
         'generated_pixel_mean': samples.mean(),
