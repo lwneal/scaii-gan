@@ -118,7 +118,12 @@ def format_demo_img(state):
 
 
 def train(epoch, ts, max_batches=100, disc_iters=5):
-    for data, labels in islice(loader, max_batches):
+    for i, (data, labels) in enumerate(islice(loader, max_batches)):
+        qvals, mask = labels
+
+        # Hack for now:
+        qvals /= 100.
+        """
         # update discriminator
         discriminator.train()
         encoder.eval()
@@ -138,11 +143,13 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
         ts.collect('Disc (Fake)', d_fake.mean())
         disc_loss.backward()
         optim_disc.step()
+        """
 
         encoder.train()
         generator.train()
         classifier.train()
 
+        """
         # Reconstruct pixels
         optim_enc.zero_grad()
         optim_gen.zero_grad()
@@ -158,27 +165,35 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
         reconstruction_loss.backward()
         optim_enc.step()
         optim_gen.step()
+        """
 
         # Update classifier
         optim_enc.zero_grad()
         optim_class.zero_grad()
+
         # Classifier outputs linear scores (logits)
-        preds = F.log_softmax(classifier(encoder(data)))
-        nll_loss = F.nll_loss(preds, labels)
-        ts.collect('Classifier NLL', nll_loss)
-        nll_loss.backward()
+        predictions = classifier(encoder(data))
+
+        # MSE loss, but only for the available data
+        qloss = torch.mean(mask * ((qvals - predictions) **2))
+        ts.collect('Q Value Regression Loss', qloss)
+
+        qloss.backward()
         optim_class.step()
         optim_enc.step()
 
-        # GAN update for realism
-        optim_gen_gan.zero_grad()
-        z = sample_z(args.batch_size, Z_dim)
-        generated = generator(z)
-        gen_loss = -discriminator(generated).mean() * args.lambda_gan
-        ts.collect('Generated pixel variance', generated.var(0).mean())
-        ts.collect('Gen Loss', gen_loss)
-        gen_loss.backward()
-        optim_gen_gan.step()
+        """
+        if i % 5 == 0:
+            # GAN update for realism
+            optim_gen_gan.zero_grad()
+            z = sample_z(args.batch_size, Z_dim)
+            generated = generator(z)
+            gen_loss = -discriminator(generated).mean() * args.lambda_gan
+            ts.collect('Generated pixel variance', generated.var(0).mean())
+            ts.collect('Gen Loss', gen_loss)
+            gen_loss.backward()
+            optim_gen_gan.step()
+        """
 
         ts.print_every(n_sec=4)
 
@@ -261,9 +276,8 @@ def make_video(output_video_name):
 
 
 def main():
-    print('creating checkpoint directory')
     os.makedirs(args.save_to_dir, exist_ok=True)
-    batches_per_epoch = 100
+    batches_per_epoch = 500
     ts_train = TimeSeries('Training', batches_per_epoch * args.epochs)
     ts_eval = TimeSeries('Evaluation', args.epochs)
     for epoch in range(args.epochs):

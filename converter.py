@@ -11,6 +11,7 @@ import numpy as np
 import random
 from gnomehat import imutil
 
+# TODO: Configure this
 DATA_DIR = '/mnt/nfs/data'
 
 # Converters can be used like a function, on a single example or a batch
@@ -50,8 +51,6 @@ class ImageConverter(Converter):
         if not filename.startswith('/'):
             filename = os.path.join(DATA_DIR, filename)
         box = example.get('box') if self.bounding_box else None
-        # HACK
-        #box = (.25, .75, 0, 1)
         img = imutil.decode_jpg(filename,
                 resize_to=self.img_shape,
                 crop_to_box=box)
@@ -122,6 +121,7 @@ class LabelConverter(Converter):
         return self.labels[np.argmax(array)]
 
 
+# FlexibleLabelConverter extracts class labels including partial and negative labels
 # Each example now has a label for each class:
 #    1 (X belongs to class Y)
 #   -1 (X does not belong to class Y)
@@ -131,7 +131,6 @@ class FlexibleLabelConverter(Converter):
         self.label_key = label_key
         self.negative_key = negative_key
         self.labels = sorted(list(set(get_labels(dataset, label_key) + get_labels(dataset, negative_key))))
-        #self.labels = get_labels(dataset, label_key)
         self.num_classes = len(self.labels)
         self.idx = {self.labels[i]: i for i in range(self.num_classes)}
         print("FlexibleLabelConverter: labels are {}".format(self.labels))
@@ -149,6 +148,30 @@ class FlexibleLabelConverter(Converter):
 
     def from_array(self, array):
         return self.labels[np.argmax(array)]
+
+
+# QValueConverter extracts action-value pairs from Dataset files
+# A network performs regression to a Q-value for each possible action
+# The label consists of a ground truth value for one action (set to 1 in the mask)
+# Other actions (set to 0 in the mask) should be ignored in the loss
+class QValueConverter(Converter):
+    def __init__(self, dataset, action_key='action', value_key='value', **kwargs):
+        self.action_key = action_key
+        self.value_key = value_key
+        self.actions = sorted(list(set(get_labels(dataset, action_key))))
+        self.num_classes = len(self.actions)
+        print("QValueConverter: actions are {}".format(self.actions))
+        values = set(get_labels(dataset, value_key))
+        self.min_val = min(values)
+        self.max_val = max(values)
+        print('Q value range: from {} to {}'.format(self.min_val, self.max_val))
+
+    def to_array(self, example):
+        qvals = np.zeros(self.num_classes)
+        mask = np.zeros(self.num_classes)
+        qvals[example[self.action_key] - 1] = example[self.value_key]
+        mask[example[self.action_key] - 1] = 1
+        return qvals, mask
 
 
 def get_labels(dataset, label_key):
