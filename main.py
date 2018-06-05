@@ -247,16 +247,16 @@ def evaluate(epoch, img_samples=8):
     # TODO: Generate images
 
     # Test classifier
-    scores = F.log_softmax(classifier(encoder(data)))
-    correct = (scores.max(dim=1)[1] == labels).sum()
-    train_accuracy = float(correct) / len(labels)
+    #scores = F.log_softmax(classifier(encoder(data)))
+    #correct = (scores.max(dim=1)[1] == labels).sum()
+    #train_accuracy = float(correct) / len(labels)
 
     return {
         'generated_pixel_mean': samples.mean(),
         'generated_pixel_variance': samples.var(0).mean(),
         'reconstruction_l2': reconstruction_l2,
         'cycle_reconstruction_l2': cycle_reconstruction_l2,
-        'train_accuracy': train_accuracy,
+        #'train_accuracy': train_accuracy,
     }
 
 
