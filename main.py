@@ -118,24 +118,27 @@ def format_demo_img(state):
 
 
 def train(epoch, ts, max_batches=100, disc_iters=5):
-
-    for i, (data, labels) in enumerate(loader):
+    for data, labels in islice(loader, max_batches):
         # update discriminator
         discriminator.train()
         encoder.eval()
         generator.eval()
 
-        z = sample_z(args.batch_size, Z_dim)
         optim_disc.zero_grad()
         optim_gen.zero_grad()
         optim_enc.zero_grad()
+
+        # Update discriminator
+        z = sample_z(args.batch_size, Z_dim)
         d_real = 1.0 - discriminator(data)
         d_fake = 1.0 + discriminator(generator(z))
         disc_loss = nn.ReLU()(d_real).mean() + nn.ReLU()(d_fake).mean()
-        disc_loss.backward()
-        optim_disc.step()
+        ts.collect('Disc Loss', disc_loss)
         ts.collect('Disc (Real)', d_real.mean())
         ts.collect('Disc (Fake)', d_fake.mean())
+
+        disc_loss.backward()
+        optim_disc.step()
 
         encoder.train()
         generator.train()
@@ -144,21 +147,22 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
         optim_gen.zero_grad()
         optim_class.zero_grad()
 
-        # reconstruct images
+        # Reconstruct pixels with Huber loss
         encoded = encoder(data)
         reconstructed = generator(encoded)
-        #reconstruction_loss = torch.mean((reconstructed - data)**2)
         reconstruction_loss = F.smooth_l1_loss(reconstructed, data)
-        reconstruction_loss.backward()
         ts.collect('Reconst. Loss', reconstruction_loss)
         ts.collect('Z variance', encoded.var(0).mean())
         ts.collect('Reconst. Pixel variance', reconstructed.var(0).mean())
         ts.collect('Z[0] mean', encoded[:,0].mean().item())
 
-        # Update classifier
-        preds = classifier(encoded)
+        # Classifier outputs linear scores (logits)
+        preds = F.log_softmax(classifier(encoded))
         nll_loss = F.nll_loss(preds, labels)
         ts.collect('Classifier NLL', nll_loss)
+
+        loss = reconstruction_loss + nll_loss
+        loss.backward()
 
         optim_enc.step()
         optim_gen.step()
@@ -170,22 +174,12 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
         generated = generator(z)
         gen_loss = -discriminator(generated).mean() * args.lambda_gan
         ts.collect('Generated pixel variance', generated.var(0).mean())
-        gen_loss.backward()
-        optim_gen_gan.step()
-        ts.collect('Disc Loss', disc_loss)
         ts.collect('Gen Loss', gen_loss)
 
+        gen_loss.backward()
+        optim_gen_gan.step()
+
         ts.print_every(n_sec=4)
-        if i % 100 == 0:
-            img_real = format_demo_img(to_np(data[0]))
-            img_recon = format_demo_img(to_np(reconstructed[0]))
-            demo_img = np.concatenate([img_real, img_recon], axis=1)
-            filename = 'reconstruction_epoch{:03d}_{:04d}.png'.format(epoch, i)
-            imutil.show(demo_img, filename=filename)
-            generated = generator(sample_z(1, Z_dim))
-            gen_img = format_demo_img(to_np(generated[0]))
-            filename = 'generated_epoch{:03d}_{:04d}.png'.format(epoch, i)
-            imutil.show(gen_img, filename=filename)
 
     scheduler_e.step()
     scheduler_d.step()
@@ -205,6 +199,10 @@ def evaluate(epoch, img_samples=8):
     discriminator.eval()
     classifier.eval()
 
+    # Load some ground-truth frames
+    data, labels = next(loader)
+
+    # Generate some sample frames, measure mode collapse
     samples = generator(fixed_z).cpu().data.numpy()
 
     # TODO: Reconstruct real frames
@@ -215,16 +213,32 @@ def evaluate(epoch, img_samples=8):
     reconstructed = generator(encoder(generator(fixed_z)))
     cycle_reconstruction_l2 = torch.mean((generator(fixed_z) - reconstructed) ** 2).item()
 
+    img_real = format_demo_img(to_np(data[0]))
+    img_recon = format_demo_img(to_np(reconstructed[0]))
+    demo_img = np.concatenate([img_real, img_recon], axis=1)
+    filename = 'reconstruction_epoch_{:03d}.png'.format(epoch)
+    imutil.show(demo_img, filename=filename)
+    generated = generator(sample_z(1, Z_dim))
+    gen_img = format_demo_img(to_np(generated[0]))
+    filename = 'generated_epoch_{:03d}.png'.format(epoch)
+    imutil.show(gen_img, filename=filename)
+
     # TODO: Measure "goodness" of generated images
 
     # TODO: Measure disentanglement of latent codes
 
     # TODO: Generate images
 
+    # Test classifier
+    scores = F.log_softmax(classifier(encoder(data)))
+    correct = (scores.max(dim=1)[1] == labels).sum()
+    train_accuracy = correct / len(labels)
+
     return {
         'generated_pixel_mean': samples.mean(),
         'generated_pixel_variance': samples.var(0).mean(),
         'cycle_reconstruction_l2': cycle_reconstruction_l2,
+        'train_accuracy': train_accuracy,
     }
 
 
