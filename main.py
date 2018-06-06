@@ -273,14 +273,38 @@ def make_linear_trajectory():
     return np.array(trajectory)
 
 
+def make_counterfactual_trajectory(x, target_action, speed=1.0, multiplier=1.0):
+    trajectory = []
+
+    z0 = encoder(x)[0]
+    z = z0.clone()
+
+    for i in range(200):
+        cf_loss = (classifier(z)[target_action]) * multiplier
+        print('Counterfactual Loss: {}'.format(cf_loss))
+        dc_dz = autograd.grad(cf_loss, z, cf_loss)[0]
+        z = z - dc_dz * speed
+        z /= torch.norm(z)
+        trajectory.append([to_np(z)])
+
+    return np.array(trajectory)
+
+
 def make_video(output_video_name, trajectory):
+    print('Generating video from trajectory shape {}'.format(trajectory.shape))
     generator.eval()
     v = imutil.VideoMaker(output_video_name)
+
+    z_0 = torch.Tensor(trajectory[0]).to(device)
+    original_samples = generator(z_0)[0]
+    original_qvals = classifier(z_0)[0]
+    left_pixels = format_demo_img(to_np(original_samples), to_np(original_qvals))
     for z in torch.Tensor(trajectory):
         z = z.to(device)
-        samples = generator(z)
-        qvals = classifier(z)
-        pixels = format_demo_img(to_np(samples[0]), to_np(qvals)[0])
+        samples = generator(z)[0]
+        qvals = classifier(z)[0]
+        right_pixels = format_demo_img(to_np(samples), to_np(qvals))
+        pixels = np.concatenate([left_pixels, right_pixels], axis=1)
         v.write_frame(pixels)
     v.finish()
 
@@ -301,6 +325,16 @@ def main():
         print(ts_eval)
 
         make_video('linear_epoch_{:03d}'.format(epoch), make_linear_trajectory())
+
+        data, _ = next(i for i in test_loader)
+        target_action = random.choice(range(4))
+        cf_trajectory = make_counterfactual_trajectory(data, target_action)
+        filename = 'cf_epoch_{:03d}_{}'.format(epoch, target_action)
+        make_video(filename, cf_trajectory)
+
+        cf_trajectory = make_counterfactual_trajectory(data, target_action, multiplier=-1)
+        filename = 'cf_epoch_{:03d}_not{}'.format(epoch, target_action)
+        make_video(filename, cf_trajectory)
 
     torch.save(discriminator.state_dict(), os.path.join(args.save_to_dir, 'disc_{}'.format(epoch)))
     torch.save(generator.state_dict(), os.path.join(args.save_to_dir, 'gen_{}'.format(epoch)))
