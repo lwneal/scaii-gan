@@ -169,7 +169,7 @@ class QValueConverter(Converter):
     def to_array(self, example):
         qvals = np.zeros(self.num_classes)
         mask = np.zeros(self.num_classes)
-        qvals[example[self.action_key] - 1] = (example[self.value_key] - self.min_val) / self.max_val
+        qvals[example[self.action_key] - 1] = (example[self.value_key] - self.min_val) / (self.max_val - self.min_val)
         mask[example[self.action_key] - 1] = 1
         return qvals, mask
 
