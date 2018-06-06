@@ -326,10 +326,10 @@ def main():
         make_video('linear_epoch_{:03d}'.format(epoch), make_linear_trajectory())
 
         data, _ = next(i for i in test_loader)
-        target_action = random.choice(range(4))
-        cf_trajectory = make_counterfactual_trajectory(data, target_action)
-        filename = 'cf_epoch_{:03d}_{}'.format(epoch, target_action)
-        make_video(filename, cf_trajectory)
+        for target_action in range(4):
+            cf_trajectory = make_counterfactual_trajectory(data, target_action)
+            filename = 'cf_epoch_{:03d}_{}'.format(epoch, target_action)
+            make_video(filename, cf_trajectory)
 
     torch.save(discriminator.state_dict(), os.path.join(args.save_to_dir, 'disc_{}'.format(epoch)))
     torch.save(generator.state_dict(), os.path.join(args.save_to_dir, 'gen_{}'.format(epoch)))
