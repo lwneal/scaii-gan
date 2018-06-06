@@ -115,10 +115,10 @@ def format_demo_img(state, qvals=None):
     draw_text(80, 128, "Enemy")
 
     if qvals is not None:
-        draw_text(10, 200, "1: {}".format(qvals[0]))
-        draw_text(10, 210, "2: {}".format(qvals[1]))
-        draw_text(10, 220, "3: {}".format(qvals[2]))
-        draw_text(10, 230, "4: {}".format(qvals[3]))
+        draw_text(10, 200, "1: {:.2f}".format(qvals[0]))
+        draw_text(10, 210, "2: {:.2f}".format(qvals[1]))
+        draw_text(10, 220, "3: {:.2f}".format(qvals[2]))
+        draw_text(10, 230, "4: {:.2f}".format(qvals[3]))
     canvas = np.array(img)
     return canvas
 
