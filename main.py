@@ -121,9 +121,6 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
     for i, (data, labels) in enumerate(islice(loader, max_batches)):
         qvals, mask = labels
 
-        # Hack for now:
-        qvals /= 100.
-        """
         # update discriminator
         discriminator.train()
         encoder.eval()
@@ -143,13 +140,11 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
         ts.collect('Disc (Fake)', d_fake.mean())
         disc_loss.backward()
         optim_disc.step()
-        """
 
         encoder.train()
         generator.train()
         classifier.train()
 
-        """
         # Reconstruct pixels
         optim_enc.zero_grad()
         optim_gen.zero_grad()
@@ -165,7 +160,6 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
         reconstruction_loss.backward()
         optim_enc.step()
         optim_gen.step()
-        """
 
         # Update classifier
         optim_enc.zero_grad()
@@ -182,7 +176,6 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
         optim_class.step()
         optim_enc.step()
 
-        """
         if i % 5 == 0:
             # GAN update for realism
             optim_gen_gan.zero_grad()
@@ -193,7 +186,6 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
             ts.collect('Gen Loss', gen_loss)
             gen_loss.backward()
             optim_gen_gan.step()
-        """
 
         ts.print_every(n_sec=4)
 
@@ -216,7 +208,7 @@ def evaluate(epoch, img_samples=8):
     classifier.eval()
 
     # Load some ground-truth frames
-    data, labels = next(loader)
+    data, (qvals, masks) = next(loader)
 
     # Generate some sample frames, measure mode collapse
     samples = generator(fixed_z).cpu().data.numpy()
@@ -229,11 +221,15 @@ def evaluate(epoch, img_samples=8):
     reconstructed = generator(encoder(generator(fixed_z)))
     cycle_reconstruction_l2 = torch.mean((generator(fixed_z) - reconstructed) ** 2).item()
 
+    # Estimate Q-values
+    predicted_q = classifier(encoder(data))[0].cpu().data.numpy()
+
     img_real = format_demo_img(to_np(data[0]))
     img_recon = format_demo_img(to_np(reconstructed[0]))
     demo_img = np.concatenate([img_real, img_recon], axis=1)
     filename = 'reconstruction_epoch_{:03d}.png'.format(epoch)
-    imutil.show(demo_img, filename=filename)
+    caption = 'Estimated Q: {}'.format(predicted_q)
+    imutil.show(demo_img, filename=filename, caption=caption)
 
     generated = generator(sample_z(1, Z_dim))
     gen_img = format_demo_img(to_np(generated[0]))
@@ -291,10 +287,10 @@ def main():
         print(ts_eval)
         make_video('epoch_{:03d}'.format(epoch))
 
-        torch.save(discriminator.state_dict(), os.path.join(args.save_to_dir, 'disc_{}'.format(epoch)))
-        torch.save(generator.state_dict(), os.path.join(args.save_to_dir, 'gen_{}'.format(epoch)))
-        torch.save(encoder.state_dict(), os.path.join(args.save_to_dir, 'enc_{}'.format(epoch)))
-        torch.save(classifier.state_dict(), os.path.join(args.save_to_dir, 'class_{}'.format(epoch)))
+    torch.save(discriminator.state_dict(), os.path.join(args.save_to_dir, 'disc_{}'.format(epoch)))
+    torch.save(generator.state_dict(), os.path.join(args.save_to_dir, 'gen_{}'.format(epoch)))
+    torch.save(encoder.state_dict(), os.path.join(args.save_to_dir, 'enc_{}'.format(epoch)))
+    torch.save(classifier.state_dict(), os.path.join(args.save_to_dir, 'class_{}'.format(epoch)))
 
 
 if __name__ == '__main__':

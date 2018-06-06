@@ -162,14 +162,14 @@ class QValueConverter(Converter):
         self.num_classes = len(self.actions)
         print("QValueConverter: actions are {}".format(self.actions))
         values = set(get_labels(dataset, value_key))
-        self.min_val = min(values)
-        self.max_val = max(values)
+        self.min_val = float(min(values))
+        self.max_val = float(max(values))
         print('Q value range: from {} to {}'.format(self.min_val, self.max_val))
 
     def to_array(self, example):
         qvals = np.zeros(self.num_classes)
         mask = np.zeros(self.num_classes)
-        qvals[example[self.action_key] - 1] = example[self.value_key]
+        qvals[example[self.action_key] - 1] = (example[self.value_key] - self.min_val) / self.max_val
         mask[example[self.action_key] - 1] = 1
         return qvals, mask
 
