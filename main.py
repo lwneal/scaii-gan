@@ -273,20 +273,19 @@ def make_linear_trajectory():
     return np.array(trajectory)
 
 
-def make_counterfactual_trajectory(x, target_action, speed=0.1, multiplier=1.0, iters=200):
+def make_counterfactual_trajectory(x, target_action, speed=0.1, iters=200):
     trajectory = []
 
     z0 = encoder(x)[0]
     z = z0.clone()
 
     for i in range(iters):
-        cf_loss = (classifier(z)[target_action]) * multiplier
+        cf_loss = 1 - classifier(z)[target_action]
         print('Counterfactual Loss: {}'.format(cf_loss))
         dc_dz = autograd.grad(cf_loss, z, cf_loss)[0]
         z = z - dc_dz * (speed * float(i) / iters)
         z /= torch.norm(z)
         trajectory.append([to_np(z)])
-
     return np.array(trajectory)
 
 
@@ -330,10 +329,6 @@ def main():
         target_action = random.choice(range(4))
         cf_trajectory = make_counterfactual_trajectory(data, target_action)
         filename = 'cf_epoch_{:03d}_{}'.format(epoch, target_action)
-        make_video(filename, cf_trajectory)
-
-        cf_trajectory = make_counterfactual_trajectory(data, target_action, multiplier=-1)
-        filename = 'cf_epoch_{:03d}_not{}'.format(epoch, target_action)
         make_video(filename, cf_trajectory)
 
     torch.save(discriminator.state_dict(), os.path.join(args.save_to_dir, 'disc_{}'.format(epoch)))
