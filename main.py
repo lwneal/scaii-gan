@@ -273,7 +273,7 @@ def make_linear_trajectory():
     return np.array(trajectory)
 
 
-def make_counterfactual_trajectory(x, target_action, speed=0.1, iters=200):
+def make_counterfactual_trajectory(x, target_action, speed=0.1, iters=300):
     trajectory = []
 
     z0 = encoder(x)[0]
