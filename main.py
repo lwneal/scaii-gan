@@ -261,18 +261,27 @@ def evaluate(epoch, img_samples=8):
     }
 
 
-def make_video(output_video_name):
-    generator.eval()
-    fixed_z = torch.randn(1, Z_dim).to(device)
-    fixed_zprime = torch.randn(1, Z_dim).to(device)
-    v = imutil.VideoMaker(output_video_name)
+def make_linear_trajectory():
+    trajectory = []
+    fixed_z = np.random.normal(size=(1, Z_dim))
+    fixed_zprime = np.random.normal(size=(1, Z_dim))
     for i in range(200):
         theta = abs(i - 100) / 100.
         z = theta * fixed_z + (1 - theta) * fixed_zprime
-        z = normalize_vector(z)
+        z /= np.linalg.norm(z)
+        trajectory.append(z)
+    return np.array(trajectory)
+
+
+def make_video(output_video_name, trajectory):
+    generator.eval()
+    v = imutil.VideoMaker(output_video_name)
+    for z in torch.Tensor(trajectory):
+        z = z.to(device)
         samples = generator(z)
-        pixels = format_demo_img(to_np(samples[0]))
-        v.write_frame(pixels, normalize_color=False, resize_to=(380,280))
+        qvals = classifier(z)
+        pixels = format_demo_img(to_np(samples[0]), to_np(qvals)[0])
+        v.write_frame(pixels)
     v.finish()
 
 
@@ -290,7 +299,8 @@ def main():
         for key, value in metrics.items():
             ts_eval.collect(key, value)
         print(ts_eval)
-        make_video('epoch_{:03d}'.format(epoch))
+
+        make_video('linear_epoch_{:03d}'.format(epoch), make_linear_trajectory())
 
     torch.save(discriminator.state_dict(), os.path.join(args.save_to_dir, 'disc_{}'.format(epoch)))
     torch.save(generator.state_dict(), os.path.join(args.save_to_dir, 'gen_{}'.format(epoch)))
