@@ -278,14 +278,18 @@ def make_counterfactual_trajectory(x, target_action, speed=0.1, iters=300):
 
     z0 = encoder(x)[0]
     z = z0.clone()
+    losses = []
 
     for i in range(iters):
         cf_loss = 1 - classifier(z)[target_action]
-        print('Counterfactual Loss: {}'.format(cf_loss))
+        losses.append(float(cf_loss))
         dc_dz = autograd.grad(cf_loss, z, cf_loss)[0]
         z = z - dc_dz * (speed * float(i) / iters)
         z /= torch.norm(z)
         trajectory.append([to_np(z)])
+    distance = float(torch.norm(z - z0, p=2))
+    print('Counterfactual distance {} initial loss {} final loss {}'.format(
+        distance, losses[0], losses[-1]))
     return np.array(trajectory)
 
 
