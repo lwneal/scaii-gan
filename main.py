@@ -25,7 +25,7 @@ parser.add_argument('--lr', type=float, default=2e-4)
 parser.add_argument('--save_to_dir', type=str, default='checkpoints')
 parser.add_argument('--load_from_dir', type=str, default='checkpoints')
 parser.add_argument('--epochs', type=int, default=25)
-parser.add_argument('--latent_size', type=int, default=4)
+parser.add_argument('--latent_size', type=int, default=16)
 parser.add_argument('--start_epoch', type=int, default=0)
 parser.add_argument('--lambda_gan', type=float, default=0.1)
 parser.add_argument('--dataset', type=str, required=True)
@@ -83,9 +83,9 @@ def normalize_vector(x, eps=.0001):
     return x / norm.expand(1, -1).t()
 
 
-def format_demo_img(state):
+def format_demo_img(state, qvals=None):
     # Fill a white background
-    canvas = np.ones((190, 140)) * 255
+    canvas = np.ones((280, 140)) * 255
     canvas[20:60,  20:60] = state[0] * 255.
     canvas[80:120,  20:60] = state[1] * 255.
     canvas[140:180, 20:60] = state[2] * 255.
@@ -113,6 +113,12 @@ def format_demo_img(state):
     draw_text(80, 8, "Large")
     draw_text(80, 68, "Friendly")
     draw_text(80, 128, "Enemy")
+
+    if qvals is not None:
+        draw_text(10, 200, "1: {}".format(qvals[0]))
+        draw_text(10, 210, "2: {}".format(qvals[1]))
+        draw_text(10, 220, "3: {}".format(qvals[2]))
+        draw_text(10, 230, "4: {}".format(qvals[3]))
     canvas = np.array(img)
     return canvas
 
@@ -153,17 +159,11 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
         reconstructed = generator(encoded)
         # Huber loss
         reconstruction_loss = F.smooth_l1_loss(reconstructed, data)
+        #reconstruction_loss = torch.sum((reconstructed - data)**2)
         ts.collect('Reconst. Loss', reconstruction_loss)
         ts.collect('Z variance', encoded.var(0).mean())
         ts.collect('Reconst. Pixel variance', reconstructed.var(0).mean())
         ts.collect('Z[0] mean', encoded[:,0].mean().item())
-        reconstruction_loss.backward()
-        optim_enc.step()
-        optim_gen.step()
-
-        # Update classifier
-        optim_enc.zero_grad()
-        optim_class.zero_grad()
 
         # Classifier outputs linear scores (logits)
         predictions = classifier(encoder(data))
@@ -172,9 +172,12 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
         qloss = torch.mean(mask * ((qvals - predictions) **2))
         ts.collect('Q Value Regression Loss', qloss)
 
-        qloss.backward()
+        loss = reconstruction_loss + qloss
+        loss.backward()
+
         optim_class.step()
         optim_enc.step()
+        optim_gen.step()
 
         if i % 5 == 0:
             # GAN update for realism
@@ -218,18 +221,17 @@ def evaluate(epoch, img_samples=8):
     reconstruction_l2 = torch.mean((reconstructed - data) ** 2).item()
 
     # Reconstruct generated frames
-    reconstructed = generator(encoder(generator(fixed_z)))
-    cycle_reconstruction_l2 = torch.mean((generator(fixed_z) - reconstructed) ** 2).item()
+    #reconstructed = generator(encoder(generator(fixed_z)))
+    #cycle_reconstruction_l2 = torch.mean((generator(fixed_z) - reconstructed) ** 2).item()
 
     # Estimate Q-values
     predicted_q = classifier(encoder(data))[0].cpu().data.numpy()
 
-    img_real = format_demo_img(to_np(data[0]))
-    img_recon = format_demo_img(to_np(reconstructed[0]))
+    img_real = format_demo_img(to_np(data[0]), qvals[0])
+    img_recon = format_demo_img(to_np(reconstructed[0]), predicted_q)
     demo_img = np.concatenate([img_real, img_recon], axis=1)
     filename = 'reconstruction_epoch_{:03d}.png'.format(epoch)
-    caption = 'Estimated Q: {}'.format(predicted_q)
-    imutil.show(demo_img, filename=filename, caption=caption)
+    imutil.show(demo_img, filename=filename)
 
     generated = generator(sample_z(1, Z_dim))
     gen_img = format_demo_img(to_np(generated[0]))
@@ -251,7 +253,7 @@ def evaluate(epoch, img_samples=8):
         'generated_pixel_mean': samples.mean(),
         'generated_pixel_variance': samples.var(0).mean(),
         'reconstruction_l2': reconstruction_l2,
-        'cycle_reconstruction_l2': cycle_reconstruction_l2,
+        #'cycle_reconstruction_l2': cycle_reconstruction_l2,
         #'train_accuracy': train_accuracy,
     }
 
