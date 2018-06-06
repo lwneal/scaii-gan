@@ -288,7 +288,7 @@ def make_counterfactual_trajectory(x, target_action, speed=0.1, iters=300):
         z /= torch.norm(z)
         trajectory.append([to_np(z)])
     distance = float(torch.norm(z - z0, p=2))
-    print('Counterfactual distance {} initial loss {} final loss {}'.format(
+    print('Counterfactual distance {:.3f} initial loss {:.3f} final loss {:.3f}'.format(
         distance, losses[0], losses[-1]))
     return np.array(trajectory)
 
