@@ -235,7 +235,8 @@ def evaluate(epoch, img_samples=8):
     imutil.show(demo_img, filename=filename)
 
     generated = generator(sample_z(1, Z_dim))
-    gen_img = format_demo_img(to_np(generated[0]))
+    gen_pred_q = classifier(encoder(data))[0].cpu().data.numpy()
+    gen_img = format_demo_img(to_np(generated[0]), gen_pred_q)
     filename = 'generated_epoch_{:03d}.png'.format(epoch)
     imutil.show(gen_img, filename=filename)
 
