@@ -273,20 +273,29 @@ def make_linear_trajectory():
     return np.array(trajectory)
 
 
-def make_counterfactual_trajectory(x, target_action, speed=0.1, iters=300):
+def make_counterfactual_trajectory(x, target_action, iters=300, initial_speed=0.1,
+                                   speed_decay=0.99, mu=0.9):
     trajectory = []
 
     z0 = encoder(x)[0]
     z = z0.clone()
     losses = []
 
+    speed = initial_speed
+    velocity = torch.zeros(z.size()).to(device)
+
     for i in range(iters):
         cf_loss = 1 - classifier(z)[target_action]
-        losses.append(float(cf_loss))
         dc_dz = autograd.grad(cf_loss, z, cf_loss)[0]
-        z = z - dc_dz * (speed * float(i) / iters)
+        losses.append(float(cf_loss))
+
+        v_prev = velocity
+        velocity = mu * velocity - speed * dc_dz
+        z += -mu * v_prev + (1 + mu) * velocity
         z /= torch.norm(z)
+        speed *= speed_decay
         trajectory.append([to_np(z)])
+
     distance = float(torch.norm(z - z0, p=2))
     print('Counterfactual distance {:.3f} initial loss {:.3f} final loss {:.3f}'.format(
         distance, losses[0], losses[-1]))
