@@ -24,7 +24,7 @@ parser.add_argument('--batch_size', type=int, default=64)
 parser.add_argument('--lr', type=float, default=2e-4)
 parser.add_argument('--save_to_dir', type=str, default='checkpoints')
 parser.add_argument('--load_from_dir', type=str, default='checkpoints')
-parser.add_argument('--epochs', type=int, default=25)
+parser.add_argument('--epochs', type=int, default=10)
 parser.add_argument('--latent_size', type=int, default=16)
 parser.add_argument('--start_epoch', type=int, default=0)
 parser.add_argument('--lambda_gan', type=float, default=0.1)
@@ -115,10 +115,11 @@ def format_demo_img(state, qvals=None):
     draw_text(80, 128, "Enemy")
 
     if qvals is not None:
-        draw_text(10, 200, "1: {:.2f}".format(qvals[0]))
-        draw_text(10, 210, "2: {:.2f}".format(qvals[1]))
-        draw_text(10, 220, "3: {:.2f}".format(qvals[2]))
-        draw_text(10, 230, "4: {:.2f}".format(qvals[3]))
+        draw_text(25, 190, "Reward Estimates")
+        draw_text(10, 200, "Atk Bot Right: {:.2f}".format(qvals[0]))
+        draw_text(10, 210, "Atk Top Right: {:.2f}".format(qvals[1]))
+        draw_text(10, 220, "Atk Bot Left:  {:.2f}".format(qvals[2]))
+        draw_text(10, 230, "Atk Top Left:  {:.2f}".format(qvals[3]))
     canvas = np.array(img)
     return canvas
 
@@ -275,7 +276,7 @@ def make_video(output_video_name):
 
 def main():
     os.makedirs(args.save_to_dir, exist_ok=True)
-    batches_per_epoch = 500
+    batches_per_epoch = 100
     ts_train = TimeSeries('Training', batches_per_epoch * args.epochs)
     ts_eval = TimeSeries('Evaluation', args.epochs)
     for epoch in range(args.epochs):
