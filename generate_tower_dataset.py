@@ -28,7 +28,10 @@ for i in tqdm(range(COUNT)):
 
     # Save game state
     filename = 'towers/images/{:09d}.png'.format(i)
-    imutil.show(state.state.transpose((2,0,1)), filename=filename)
+    pixels = state.state.transpose((2,0,1))
+    # HP ranges from [0,.13], rescale it here
+    pixels[0] *= 6
+    imutil.show(pixels, filename=filename)
 
     # Compute reward for one randomly-selected action
     tower_id = random.choice(range(1, 5))
