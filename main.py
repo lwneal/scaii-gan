@@ -37,6 +37,7 @@ Z_dim = args.latent_size
 from dataloader import CustomDataloader
 from converter import SkyRTSConverter
 loader = CustomDataloader(args.dataset, batch_size=args.batch_size, img_format=SkyRTSConverter)
+test_loader = CustomDataloader(args.dataset, batch_size=args.batch_size, img_format=SkyRTSConverter, fold='test')
 
 
 print('Building model...')
@@ -115,11 +116,11 @@ def format_demo_img(state, qvals=None):
     draw_text(80, 128, "Enemy")
 
     if qvals is not None:
-        draw_text(25, 190, "Reward Estimates")
-        draw_text(10, 200, "Atk Bot Right: {:.2f}".format(qvals[0]))
-        draw_text(10, 210, "Atk Top Right: {:.2f}".format(qvals[1]))
-        draw_text(10, 220, "Atk Bot Left:  {:.2f}".format(qvals[2]))
-        draw_text(10, 230, "Atk Top Left:  {:.2f}".format(qvals[3]))
+        draw_text(25, 195, "Reward Estimates")
+        draw_text(10, 210, "Atk Top Left:  {:.2f}".format(qvals[3]))
+        draw_text(10, 220, "Atk Top Right: {:.2f}".format(qvals[2]))
+        draw_text(10, 230, "Atk Bot Left:  {:.2f}".format(qvals[1]))
+        draw_text(10, 240, "Atk Bot Right: {:.2f}".format(qvals[0]))
     canvas = np.array(img)
     return canvas
 
@@ -212,7 +213,7 @@ def evaluate(epoch, img_samples=8):
     classifier.eval()
 
     # Load some ground-truth frames
-    data, (qvals, masks) = next(loader)
+    data, (qvals, masks) = next(i for i in test_loader)
 
     # Generate some sample frames, measure mode collapse
     samples = generator(fixed_z).cpu().data.numpy()

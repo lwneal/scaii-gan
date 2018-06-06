@@ -41,6 +41,7 @@ for i in tqdm(range(COUNT)):
         'filename': filename,
         'action': tower_id,
         'value': state.reward,
+        'fold': 'train' if i % 10 else 'test'
     })
 
 with open('towers.dataset', 'w') as fp:
