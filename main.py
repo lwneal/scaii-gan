@@ -13,7 +13,7 @@ from torchvision import datasets, transforms
 from torch import autograd
 
 import model
-from gnomehat.series import TimeSeries
+from logutil import TimeSeries
 import imutil
 
 device = torch.device("cuda")
