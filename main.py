@@ -14,7 +14,7 @@ from torch import autograd
 
 import model
 from gnomehat.series import TimeSeries
-from gnomehat import imutil
+import imutil
 
 device = torch.device("cuda")
 

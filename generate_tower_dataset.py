@@ -4,7 +4,7 @@ import numpy as np
 import random
 
 from tqdm import tqdm
-from gnomehat import imutil
+import imutil
 from scaii.env.sky_rts.env.scenarios.tower_example import TowerExample
 
 COUNT = 100 * 1000
