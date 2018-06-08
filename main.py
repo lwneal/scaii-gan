@@ -1,15 +1,12 @@
 import argparse
 import numpy as np
 import os
-import random
 from itertools import islice
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from torch.optim.lr_scheduler import ExponentialLR
-from torchvision import datasets, transforms
 from torch import autograd
 
 import model
@@ -98,13 +95,14 @@ def format_demo_img(state, qvals=None):
     # Now draw all the text captions
     from PIL import Image, ImageFont, ImageDraw
     img = Image.fromarray(canvas.astype('uint8'))
+    # Should be available on Ubuntu 14.04+
     FONT_FILE = '/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf'
     font = ImageFont.truetype(FONT_FILE, 10)
     draw = ImageDraw.Draw(img)
 
     def draw_text(x, y, caption):
         textsize = draw.textsize(caption, font=font)
-        #draw.rectangle([(x, y), textsize], fill=(0,0,0,128))
+        draw.rectangle([(x, y), textsize], fill=(0,))
         draw.multiline_text((x,y), caption, font=font)
 
     draw_text(20, 8, "Health")
