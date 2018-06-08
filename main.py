@@ -28,7 +28,6 @@ parser.add_argument('--lambda_gan', type=float, default=0.1)
 parser.add_argument('--dataset', type=str, required=True)
 
 args = parser.parse_args()
-Z_dim = args.latent_size
 
 
 from dataloader import CustomDataloader
@@ -40,9 +39,9 @@ test_loader = CustomDataloader(args.dataset, batch_size=args.batch_size, img_for
 print('Building model...')
 
 discriminator = model.Discriminator().to(device)
-generator = model.Generator(Z_dim).to(device)
-encoder = model.Encoder(Z_dim).to(device)
-classifier = model.Classifier(Z_dim).to(device)
+generator = model.Generator(args.latent_size).to(device)
+encoder = model.Encoder(args.latent_size).to(device)
+classifier = model.Classifier(args.latent_size).to(device)
 
 if args.start_epoch:
     generator.load_state_dict(torch.load('{}/gen_{}'.format(args.load_from_dir, args.start_epoch)))
@@ -137,7 +136,7 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
         optim_enc.zero_grad()
 
         # Update discriminator
-        z = sample_z(args.batch_size, Z_dim)
+        z = sample_z(args.batch_size, args.latent_size)
         d_real = 1.0 - discriminator(data)
         d_fake = 1.0 + discriminator(generator(z))
         disc_loss = nn.ReLU()(d_real).mean() + nn.ReLU()(d_fake).mean()
@@ -182,7 +181,7 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
         if i % 5 == 0:
             # GAN update for realism
             optim_gen_gan.zero_grad()
-            z = sample_z(args.batch_size, Z_dim)
+            z = sample_z(args.batch_size, args.latent_size)
             generated = generator(z)
             gen_loss = -discriminator(generated).mean() * args.lambda_gan
             ts.collect('Generated pixel variance', generated.var(0).mean())
@@ -203,7 +202,7 @@ def to_np(tensor):
     return tensor.detach().cpu().numpy()
 
 
-fixed_z = sample_z(args.batch_size, Z_dim)
+fixed_z = sample_z(args.batch_size, args.latent_size)
 def evaluate(epoch, img_samples=8):
     encoder.eval()
     generator.eval()
@@ -233,7 +232,7 @@ def evaluate(epoch, img_samples=8):
     filename = 'reconstruction_epoch_{:03d}.png'.format(epoch)
     imutil.show(demo_img, filename=filename)
 
-    generated = generator(sample_z(1, Z_dim))
+    generated = generator(sample_z(1, args.latent_size))
     gen_pred_q = classifier(encoder(data))[0].cpu().data.numpy()
     gen_img = format_demo_img(to_np(generated[0]), gen_pred_q)
     filename = 'generated_epoch_{:03d}.png'.format(epoch)
@@ -261,8 +260,8 @@ def evaluate(epoch, img_samples=8):
 
 def make_linear_trajectory():
     trajectory = []
-    fixed_z = np.random.normal(size=(1, Z_dim))
-    fixed_zprime = np.random.normal(size=(1, Z_dim))
+    fixed_z = np.random.normal(size=(1, args.latent_size))
+    fixed_zprime = np.random.normal(size=(1, args.latent_size))
     for i in range(200):
         theta = abs(i - 100) / 100.
         z = theta * fixed_z + (1 - theta) * fixed_zprime
