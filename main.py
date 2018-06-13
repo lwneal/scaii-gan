@@ -162,6 +162,8 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
         optim_enc.zero_grad()
         optim_gen.zero_grad()
         optim_class.zero_grad()
+        optim_predictor.zero_grad()
+
         encoded = encoder(current_frame)
         reconstructed = generator(encoded)
         # Huber loss
@@ -362,7 +364,7 @@ def make_video(output_video_name, trajectory):
 
 def main():
     os.makedirs(args.save_to_dir, exist_ok=True)
-    batches_per_epoch = 400
+    batches_per_epoch = 200
     ts_train = TimeSeries('Training', batches_per_epoch * args.epochs)
     ts_eval = TimeSeries('Evaluation', args.epochs)
     for epoch in range(args.epochs):
