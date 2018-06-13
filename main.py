@@ -167,9 +167,9 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
         # Huber loss
         reconstruction_loss = F.smooth_l1_loss(reconstructed, current_frame)
         #reconstruction_loss = torch.sum((reconstructed - current_frame)**2)
-        ts.collect('Reconst. Loss', reconstruction_loss)
+        ts.collect('Reconst Loss', reconstruction_loss)
         ts.collect('Z variance', encoded.var(0).mean())
-        ts.collect('Reconst. Pixel variance', reconstructed.var(0).mean())
+        ts.collect('Reconst Pixel variance', reconstructed.var(0).mean())
         ts.collect('Z[0] mean', encoded[:,0].mean().item())
 
         # ValueEstimator outputs linear scores (logits)
@@ -188,7 +188,7 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
         predicted_next_frame = generator(predicted_latent_points)
 
         pred_rec_loss = F.smooth_l1_loss(predicted_next_frame, next_frame)
-        ts.collect('Pred. Recon. Loss', pred_rec_loss)
+        ts.collect('Pred Recon Loss', pred_rec_loss)
 
         loss = reconstruction_loss + qloss + pred_rec_loss
         loss.backward()
