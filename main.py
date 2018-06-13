@@ -101,7 +101,7 @@ def format_demo_img(state, qvals=None):
 
     def draw_text(x, y, caption):
         textsize = draw.textsize(caption, font=font)
-        draw.rectangle([(x, y), textsize], fill=(0,))
+        #draw.rectangle([(x, y), textsize], fill=(0,))
         draw.multiline_text((x,y), caption, font=font)
 
     draw_text(20, 8, "Health")
