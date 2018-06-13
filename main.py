@@ -362,7 +362,7 @@ def make_video(output_video_name, trajectory):
 
 def main():
     os.makedirs(args.save_to_dir, exist_ok=True)
-    batches_per_epoch = 100
+    batches_per_epoch = 400
     ts_train = TimeSeries('Training', batches_per_epoch * args.epochs)
     ts_eval = TimeSeries('Evaluation', args.epochs)
     for epoch in range(args.epochs):
