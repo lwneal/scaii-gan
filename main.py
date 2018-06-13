@@ -84,7 +84,7 @@ def normalize_vector(x, eps=.0001):
     return x / norm.expand(1, -1).t()
 
 
-def format_demo_img(state, qvals=None):
+def format_demo_img(state, qvals=None, caption_text="Title"):
     # Fill a white background
     canvas = np.ones((280, 140)) * 255
     canvas[20:60,  20:60] = state[0] * 255.
@@ -107,6 +107,8 @@ def format_demo_img(state, qvals=None):
         textsize = draw.textsize(caption, font=font)
         #draw.rectangle([(x, y), textsize], fill=(0,))
         draw.multiline_text((x,y), caption, font=font)
+
+    draw_text(0,0, caption_text)
 
     draw_text(20, 8, "Health")
     draw_text(20, 68, "Agent")
@@ -246,8 +248,9 @@ def evaluate(epoch, img_samples=8):
     # Estimate Q-values
     predicted_q = value_estimator(encoder(curr_frame))[0].cpu().data.numpy()
 
-    img_real = format_demo_img(to_np(curr_frame[0]), qvals[0])
-    img_recon = format_demo_img(to_np(reconstructed[0]), predicted_q)
+    img_real = format_demo_img(to_np(curr_frame[0]), qvals[0], "True Current State")
+    img_recon = format_demo_img(to_np(reconstructed[0]),
+                                predicted_q, "Reconstructed Current")
     demo_img = np.concatenate([img_real, img_recon], axis=1)
     filename = 'reconstruction_epoch_{:03d}.png'.format(epoch)
     imutil.show(demo_img, filename=filename)
@@ -257,6 +260,23 @@ def evaluate(epoch, img_samples=8):
     gen_img = format_demo_img(to_np(generated[0]), gen_pred_q)
     filename = 'generated_epoch_{:03d}.png'.format(epoch)
     imutil.show(gen_img, filename=filename)
+
+
+
+    # Generate predicted next frames
+    encoded = encoder(curr_frame)
+    predicted_successors = predictor(encoded)
+    known_idx = masks.max(dim=1)[1]
+    indices = known_idx.view(-1,1,1).expand(64,1,16)
+    predicted_latent_points = predicted_successors.gather(1, indices)
+    predicted_next_frame = generator(predicted_latent_points)
+
+    # Visualize side-by-side true outcomes and predicted outcomes
+    img_next_real = format_demo_img(to_np(next_frame[0]), None, "True Next State")
+    img_next_pred = format_demo_img(to_np(predicted_next_frame[0]), None, "Predicted Next State")
+    demo_img = np.concatenate([img_real, img_recon, img_next_pred, img_next_real], axis=1)
+    filename = 'prediction_epoch_{:03d}.png'.format(epoch)
+    imutil.show(demo_img, filename=filename)
 
     # TODO: Measure "goodness" of generated images
 
