@@ -87,13 +87,13 @@ def normalize_vector(x, eps=.0001):
 def format_demo_img(state, qvals=None, caption_text="Title"):
     # Fill a white background
     canvas = np.ones((280, 140)) * 255
-    canvas[20:60,  20:60] = state[0] * 255.
-    canvas[80:120,  20:60] = state[1] * 255.
-    canvas[140:180, 20:60] = state[2] * 255.
+    canvas[32:72,  20:60] = state[0] * 255.
+    canvas[92:132,  20:60] = state[1] * 255.
+    canvas[152:192, 20:60] = state[2] * 255.
 
-    canvas[20:60,  80:120] = state[3] * 255.
-    canvas[80:120,  80:120] = state[4] * 255.
-    canvas[140:180, 80:120] = state[5] * 255.
+    canvas[32:72,  80:120] = state[3] * 255.
+    canvas[92:132,  80:120] = state[4] * 255.
+    canvas[152:192, 80:120] = state[5] * 255.
 
     # Now draw all the text captions
     from PIL import Image, ImageFont, ImageDraw
@@ -110,20 +110,20 @@ def format_demo_img(state, qvals=None, caption_text="Title"):
 
     draw_text(0,0, caption_text)
 
-    draw_text(20, 8, "Health")
-    draw_text(20, 68, "Agent")
-    draw_text(20, 128, "Small")
+    draw_text(20, 20, "Health")
+    draw_text(20, 80, "Agent")
+    draw_text(20, 140, "Small")
 
-    draw_text(80, 8, "Large")
-    draw_text(80, 68, "Friendly")
-    draw_text(80, 128, "Enemy")
+    draw_text(80, 20, "Large")
+    draw_text(80, 80, "Friendly")
+    draw_text(80, 140, "Enemy")
 
     if qvals is not None:
-        draw_text(25, 195, "Reward Estimates")
-        draw_text(10, 210, "Atk Top Left:  {:.2f}".format(qvals[3]))
-        draw_text(10, 220, "Atk Top Right: {:.2f}".format(qvals[2]))
-        draw_text(10, 230, "Atk Bot Left:  {:.2f}".format(qvals[1]))
-        draw_text(10, 240, "Atk Bot Right: {:.2f}".format(qvals[0]))
+        draw_text(25, 207, "Reward Estimates")
+        draw_text(10, 222, "Atk Top Left:  {:.2f}".format(qvals[3]))
+        draw_text(10, 232, "Atk Top Right: {:.2f}".format(qvals[2]))
+        draw_text(10, 242, "Atk Bot Left:  {:.2f}".format(qvals[1]))
+        draw_text(10, 252, "Atk Bot Right: {:.2f}".format(qvals[0]))
     canvas = np.array(img)
     return canvas
 
@@ -272,8 +272,10 @@ def evaluate(epoch, img_samples=8):
     predicted_next_frame = generator(predicted_latent_points)
 
     # Visualize side-by-side true outcomes and predicted outcomes
-    img_next_real = format_demo_img(to_np(next_frame[0]), None, "True Next State")
-    img_next_pred = format_demo_img(to_np(predicted_next_frame[0]), None, "Predicted Next State")
+    img_next_real = format_demo_img(to_np(next_frame[0]), None,
+                                    "True Outcome Action {}".format(known_idx[0]))
+    img_next_pred = format_demo_img(to_np(predicted_next_frame[0]), None,
+                                    "Pred. Outcome Action {}".format(known_idx[0]))
     demo_img = np.concatenate([img_real, img_recon, img_next_pred, img_next_real], axis=1)
     filename = 'prediction_epoch_{:03d}.png'.format(epoch)
     imutil.show(demo_img, filename=filename)
