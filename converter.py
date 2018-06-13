@@ -80,10 +80,15 @@ class SkyRTSConverter(Converter):
         self.data_dir = dataset.data_dir
 
     def to_array(self, example):
-        filename = os.path.expanduser(example['filename'])
+        curr = self.filename_to_pixels(self.get_filename(example, 'filename'))
+        next = self.filename_to_pixels(self.get_filename(example, 'next_filename'))
+        return curr, next
+
+    def get_filename(self, example, key):
+        filename = os.path.expanduser(example[key])
         if not filename.startswith('/'):
             filename = os.path.join(DATA_DIR, filename)
-        return self.filename_to_pixels(filename)
+        return filename
 
     def filename_to_pixels(self, filename):
         # Input is a PNG composed of 6 40x40 monochrome images
@@ -168,6 +173,9 @@ class QValueConverter(Converter):
         self.min_val = float(min(values))
         self.max_val = float(max(values))
         print('Q value range: from {} to {}'.format(self.min_val, self.max_val))
+        if self.min_val == self.max_val:
+            print('Warning: No Q value range')
+            self.max_val += 1.0
 
     def to_array(self, example):
         qvals = np.zeros(self.num_classes)

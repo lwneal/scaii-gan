@@ -41,13 +41,15 @@ print('Building model...')
 discriminator = model.Discriminator().to(device)
 generator = model.Generator(args.latent_size).to(device)
 encoder = model.Encoder(args.latent_size).to(device)
-classifier = model.Classifier(args.latent_size).to(device)
+value_estimator = model.ValueEstimator(args.latent_size).to(device)
+predictor = model.Predictor(args.latent_size).to(device)
 
 if args.start_epoch:
     generator.load_state_dict(torch.load('{}/gen_{}'.format(args.load_from_dir, args.start_epoch)))
     encoder.load_state_dict(torch.load('{}/enc_{}'.format(args.load_from_dir, args.start_epoch)))
     discriminator.load_state_dict(torch.load('{}/disc_{}'.format(args.load_from_dir, args.start_epoch)))
-    classifier.load_state_dict(torch.load('{}/class_{}'.format(args.load_from_dir, args.start_epoch)))
+    value_estimator.load_state_dict(torch.load('{}/value_{}'.format(args.load_from_dir, args.start_epoch)))
+    value_estimator.load_state_dict(torch.load('{}/predictor_{}'.format(args.load_from_dir, args.start_epoch)))
 
 # because the spectral normalization module creates parameters that don't require gradients (u and v), we don't want to 
 # optimize these using sgd. We only let the optimizer operate on parameters that _do_ require gradients
@@ -57,14 +59,16 @@ optim_disc = optim.Adam(filter(lambda p: p.requires_grad, discriminator.paramete
 optim_gen = optim.Adam(generator.parameters(), lr=args.lr, betas=(0.0,0.9))
 optim_gen_gan = optim.Adam(generator.parameters(), lr=args.lr, betas=(0.0,0.9))
 optim_enc = optim.Adam(filter(lambda p: p.requires_grad, encoder.parameters()), lr=args.lr, betas=(0.0,0.9))
-optim_class = optim.Adam(classifier.parameters(), lr=args.lr)
+optim_class = optim.Adam(value_estimator.parameters(), lr=args.lr)
+optim_predictor = optim.Adam(predictor.parameters(), lr=args.lr)
 
 # use an exponentially decaying learning rate
 scheduler_d = optim.lr_scheduler.ExponentialLR(optim_disc, gamma=0.99)
 scheduler_g = optim.lr_scheduler.ExponentialLR(optim_gen, gamma=0.99)
 scheduler_g_gan = optim.lr_scheduler.ExponentialLR(optim_gen_gan, gamma=0.99)
 scheduler_e = optim.lr_scheduler.ExponentialLR(optim_enc, gamma=0.99)
-scheduler_c = optim.lr_scheduler.ExponentialLR(optim_enc, gamma=0.99)
+scheduler_c = optim.lr_scheduler.ExponentialLR(optim_class, gamma=0.99)
+scheduler_p = optim.lr_scheduler.ExponentialLR(optim_predictor, gamma=0.99)
 print('Finished building model')
 
 
@@ -124,6 +128,8 @@ def format_demo_img(state, qvals=None):
 
 def train(epoch, ts, max_batches=100, disc_iters=5):
     for i, (data, labels) in enumerate(islice(loader, max_batches)):
+        current_frame = data[:, 0]
+        next_frame = data[:, 1]
         qvals, mask = labels
 
         # update discriminator
@@ -137,7 +143,7 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
 
         # Update discriminator
         z = sample_z(args.batch_size, args.latent_size)
-        d_real = 1.0 - discriminator(data)
+        d_real = 1.0 - discriminator(current_frame)
         d_fake = 1.0 + discriminator(generator(z))
         disc_loss = nn.ReLU()(d_real).mean() + nn.ReLU()(d_fake).mean()
         ts.collect('Disc Loss', disc_loss)
@@ -148,35 +154,47 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
 
         encoder.train()
         generator.train()
-        classifier.train()
+        value_estimator.train()
 
         # Reconstruct pixels
         optim_enc.zero_grad()
         optim_gen.zero_grad()
         optim_class.zero_grad()
-        encoded = encoder(data)
+        encoded = encoder(current_frame)
         reconstructed = generator(encoded)
         # Huber loss
-        reconstruction_loss = F.smooth_l1_loss(reconstructed, data)
-        #reconstruction_loss = torch.sum((reconstructed - data)**2)
+        reconstruction_loss = F.smooth_l1_loss(reconstructed, current_frame)
+        #reconstruction_loss = torch.sum((reconstructed - current_frame)**2)
         ts.collect('Reconst. Loss', reconstruction_loss)
         ts.collect('Z variance', encoded.var(0).mean())
         ts.collect('Reconst. Pixel variance', reconstructed.var(0).mean())
         ts.collect('Z[0] mean', encoded[:,0].mean().item())
 
-        # Classifier outputs linear scores (logits)
-        predictions = classifier(encoder(data))
+        # ValueEstimator outputs linear scores (logits)
+        predictions = value_estimator(encoder(current_frame))
 
         # MSE loss, but only for the available data
         qloss = torch.mean(mask * ((qvals - predictions) **2))
         ts.collect('Q Value Regression Loss', qloss)
 
-        loss = reconstruction_loss + qloss
+        # Reconstruction loss for the simulated next frame
+        # But again, ~only~ for the frames we know the future state of
+        predicted_successors = predictor(encoded)
+        known_idx = mask.max(dim=1)[1]
+        indices = known_idx.view(-1,1,1).expand(64,1,16)
+        predicted_latent_points = predicted_successors.gather(1, indices)
+        predicted_next_frame = generator(predicted_latent_points)
+
+        pred_rec_loss = F.smooth_l1_loss(predicted_next_frame, next_frame)
+        ts.collect('Pred. Recon. Loss', pred_rec_loss)
+
+        loss = reconstruction_loss + qloss + pred_rec_loss
         loss.backward()
 
         optim_class.step()
         optim_enc.step()
         optim_gen.step()
+        optim_predictor.step()
 
         if i % 5 == 0:
             # GAN update for realism
@@ -207,33 +225,35 @@ def evaluate(epoch, img_samples=8):
     encoder.eval()
     generator.eval()
     discriminator.eval()
-    classifier.eval()
+    value_estimator.eval()
 
     # Load some ground-truth frames
     data, (qvals, masks) = next(i for i in test_loader)
+    curr_frame = data[:,0]
+    next_frame = data[:,1]
 
     # Generate some sample frames, measure mode collapse
     samples = generator(fixed_z).cpu().data.numpy()
 
     # Reconstruct real frames
-    reconstructed = generator(encoder(data))
-    reconstruction_l2 = torch.mean((reconstructed - data) ** 2).item()
+    reconstructed = generator(encoder(curr_frame))
+    reconstruction_l2 = torch.mean((reconstructed - curr_frame) ** 2).item()
 
     # Reconstruct generated frames
     #reconstructed = generator(encoder(generator(fixed_z)))
     #cycle_reconstruction_l2 = torch.mean((generator(fixed_z) - reconstructed) ** 2).item()
 
     # Estimate Q-values
-    predicted_q = classifier(encoder(data))[0].cpu().data.numpy()
+    predicted_q = value_estimator(encoder(curr_frame))[0].cpu().data.numpy()
 
-    img_real = format_demo_img(to_np(data[0]), qvals[0])
+    img_real = format_demo_img(to_np(curr_frame[0]), qvals[0])
     img_recon = format_demo_img(to_np(reconstructed[0]), predicted_q)
     demo_img = np.concatenate([img_real, img_recon], axis=1)
     filename = 'reconstruction_epoch_{:03d}.png'.format(epoch)
     imutil.show(demo_img, filename=filename)
 
     generated = generator(sample_z(1, args.latent_size))
-    gen_pred_q = classifier(encoder(data))[0].cpu().data.numpy()
+    gen_pred_q = value_estimator(encoder(curr_frame))[0].cpu().data.numpy()
     gen_img = format_demo_img(to_np(generated[0]), gen_pred_q)
     filename = 'generated_epoch_{:03d}.png'.format(epoch)
     imutil.show(gen_img, filename=filename)
@@ -282,7 +302,7 @@ def make_counterfactual_trajectory(x, target_action, iters=300, initial_speed=0.
     velocity = torch.zeros(z.size()).to(device)
 
     for i in range(iters):
-        cf_loss = 1 - classifier(z)[target_action]
+        cf_loss = 1 - value_estimator(z)[target_action]
         dc_dz = autograd.grad(cf_loss, z, cf_loss)[0]
         losses.append(float(cf_loss))
 
@@ -306,12 +326,12 @@ def make_video(output_video_name, trajectory):
 
     z_0 = torch.Tensor(trajectory[0]).to(device)
     original_samples = generator(z_0)[0]
-    original_qvals = classifier(z_0)[0]
+    original_qvals = value_estimator(z_0)[0]
     left_pixels = format_demo_img(to_np(original_samples), to_np(original_qvals))
     for z in torch.Tensor(trajectory):
         z = z.to(device)
         samples = generator(z)[0]
-        qvals = classifier(z)[0]
+        qvals = value_estimator(z)[0]
         right_pixels = format_demo_img(to_np(samples), to_np(qvals))
         pixels = np.concatenate([left_pixels, right_pixels], axis=1)
         v.write_frame(pixels)
@@ -337,14 +357,16 @@ def main():
 
         data, _ = next(i for i in test_loader)
         for target_action in range(4):
-            cf_trajectory = make_counterfactual_trajectory(data, target_action)
+            curr_frame = data[:,0]
+            cf_trajectory = make_counterfactual_trajectory(curr_frame, target_action)
             filename = 'cf_epoch_{:03d}_{}'.format(epoch, target_action)
             make_video(filename, cf_trajectory)
 
     torch.save(discriminator.state_dict(), os.path.join(args.save_to_dir, 'disc_{}'.format(epoch)))
     torch.save(generator.state_dict(), os.path.join(args.save_to_dir, 'gen_{}'.format(epoch)))
     torch.save(encoder.state_dict(), os.path.join(args.save_to_dir, 'enc_{}'.format(epoch)))
-    torch.save(classifier.state_dict(), os.path.join(args.save_to_dir, 'class_{}'.format(epoch)))
+    torch.save(value_estimator.state_dict(), os.path.join(args.save_to_dir, 'value_{}'.format(epoch)))
+    torch.save(predictor.state_dict(), os.path.join(args.save_to_dir, 'predictor_{}'.format(epoch)))
 
 
 if __name__ == '__main__':
