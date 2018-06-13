@@ -83,6 +83,9 @@ class SkyRTSConverter(Converter):
         filename = os.path.expanduser(example['filename'])
         if not filename.startswith('/'):
             filename = os.path.join(DATA_DIR, filename)
+        return self.filename_to_pixels(filename)
+
+    def filename_to_pixels(self, filename):
         # Input is a PNG composed of 6 40x40 monochrome images
         # It encodes frames of a game, similar to the SC2 API
         # From top-left to bottom-right, maps represent:
