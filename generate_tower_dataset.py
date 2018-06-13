@@ -67,7 +67,8 @@ for i in tqdm(range(COUNT)):
 
     examples.append({
         'filename': filename,
-        'action': action_names[tower_id],
+        'action': tower_id,
+        'action_name': action_names[tower_id],
         'next_filename': next_filename,
         'value': state.reward,
         'fold': 'train' if i % 10 else 'test'
