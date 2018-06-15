@@ -259,7 +259,7 @@ def evaluate(epoch, img_samples=8):
 
     generated = generator(sample_z(1, args.latent_size))
     gen_pred_q = value_estimator(encoder(curr_frame))[0].cpu().data.numpy()
-    gen_img = format_demo_img(to_np(generated[0]), gen_pred_q)
+    gen_img = format_demo_img(to_np(generated[0]), gen_pred_q, 'Generated Image')
     filename = 'generated_epoch_{:03d}.png'.format(epoch)
     imutil.show(gen_img, filename=filename)
 
@@ -343,7 +343,7 @@ def make_counterfactual_trajectory(x, target_action, iters=300, initial_speed=0.
     return np.array(trajectory)
 
 
-def make_video(output_video_name, trajectory):
+def make_video(output_video_name, trajectory, whatif=""):
     print('Generating video from trajectory shape {}'.format(trajectory.shape))
     generator.eval()
     v = imutil.VideoMaker(output_video_name)
@@ -351,12 +351,14 @@ def make_video(output_video_name, trajectory):
     z_0 = torch.Tensor(trajectory[0]).to(device)
     original_samples = generator(z_0)[0]
     original_qvals = value_estimator(z_0)[0]
-    left_pixels = format_demo_img(to_np(original_samples), to_np(original_qvals))
+    left_pixels = format_demo_img(to_np(original_samples), to_np(original_qvals),
+                                  'Reality')
     for z in torch.Tensor(trajectory):
         z = z.to(device)
         samples = generator(z)[0]
         qvals = value_estimator(z)[0]
-        right_pixels = format_demo_img(to_np(samples), to_np(qvals))
+        right_pixels = format_demo_img(to_np(samples), to_np(qvals),
+                                       'What If: {}'.format(whatif))
         pixels = np.concatenate([left_pixels, right_pixels], axis=1)
         v.write_frame(pixels)
     v.finish()
@@ -377,14 +379,15 @@ def main():
             ts_eval.collect(key, value)
         print(ts_eval)
 
-        make_video('linear_epoch_{:03d}'.format(epoch), make_linear_trajectory())
+        make_video('linear_epoch_{:03d}'.format(epoch), make_linear_trajectory(),
+                   whatif='random')
 
         data, _ = next(i for i in test_loader)
         for target_action in range(4):
             curr_frame = data[:,0]
             cf_trajectory = make_counterfactual_trajectory(curr_frame, target_action)
             filename = 'cf_epoch_{:03d}_{}'.format(epoch, target_action)
-            make_video(filename, cf_trajectory)
+            make_video(filename, cf_trajectory, whatif=' action={}'.format(target_action))
 
     torch.save(discriminator.state_dict(), os.path.join(args.save_to_dir, 'disc_{}'.format(epoch)))
     torch.save(generator.state_dict(), os.path.join(args.save_to_dir, 'gen_{}'.format(epoch)))
