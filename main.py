@@ -185,7 +185,7 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
         # But again, ~only~ for the frames we know the future state of
         predicted_successors = predictor(encoded)
         known_idx = mask.max(dim=1)[1]
-        indices = known_idx.view(-1,1,1).expand(64,1,16)
+        indices = known_idx.view(-1,1,1).expand(args.batch_size,1,args.latent_size)
         predicted_latent_points = predicted_successors.gather(1, indices)
         predicted_next_frame = generator(predicted_latent_points)
 
@@ -269,7 +269,7 @@ def evaluate(epoch, img_samples=8):
     encoded = encoder(curr_frame)
     predicted_successors = predictor(encoded)
     known_idx = masks.max(dim=1)[1]
-    indices = known_idx.view(-1,1,1).expand(64,1,16)
+    indices = known_idx.view(-1,1,1).expand(args.batch_size,1,args.latent_size)
     predicted_latent_points = predicted_successors.gather(1, indices)
     predicted_next_frame = generator(predicted_latent_points)
 
