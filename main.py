@@ -134,7 +134,6 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
         next_frame = data[:, 1]
         qvals, mask = labels
 
-        # update discriminator
         discriminator.train()
         encoder.eval()
         generator.eval()
@@ -158,6 +157,20 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
         generator.train()
         value_estimator.train()
 
+        # Update generator (based on output of discriminator)
+        optim_gen.zero_grad()
+        z = sample_z(args.batch_size, args.latent_size)
+        d_gen = 1.0 - discriminator(generator(z))
+        gen_loss = nn.ReLU()(d_gen).mean()
+        # Alternative: If you want to only make reconstructions realistic
+        #d_gen = 1.0 - discriminator(generator(encoder(current_frame)))
+        gen_loss.backward()
+        optim_gen.step()
+
+        # For Improved Wasserstein GAN:
+        # gp_loss = calc_gradient_penalty(discriminator, ...)
+        # gp_loss.backward()
+
         # Reconstruct pixels
         optim_enc.zero_grad()
         optim_gen.zero_grad()
@@ -168,6 +181,7 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
         reconstructed = generator(encoded)
         # Huber loss
         reconstruction_loss = F.smooth_l1_loss(reconstructed, current_frame)
+        # Alternative: Good old-fashioned MSE loss
         #reconstruction_loss = torch.sum((reconstructed - current_frame)**2)
         ts.collect('Reconst Loss', reconstruction_loss)
         ts.collect('Z variance', encoded.var(0).mean())
@@ -222,96 +236,6 @@ def train(epoch, ts, max_batches=100, disc_iters=5):
 
 def to_np(tensor):
     return tensor.detach().cpu().numpy()
-
-
-fixed_z = sample_z(args.batch_size, args.latent_size)
-def evaluate(epoch, img_samples=8):
-    encoder.eval()
-    generator.eval()
-    discriminator.eval()
-    value_estimator.eval()
-
-    # Load some ground-truth frames
-    data, (qvals, masks) = next(i for i in test_loader)
-    curr_frame = data[:,0]
-    next_frame = data[:,1]
-
-    # Generate some sample frames, measure mode collapse
-    samples = generator(fixed_z).cpu().data.numpy()
-
-    # Reconstruct real frames
-    reconstructed = generator(encoder(curr_frame))
-    reconstruction_l2 = torch.mean((reconstructed - curr_frame) ** 2).item()
-
-    # Reconstruct generated frames
-    #reconstructed = generator(encoder(generator(fixed_z)))
-    #cycle_reconstruction_l2 = torch.mean((generator(fixed_z) - reconstructed) ** 2).item()
-
-    # Estimate Q-values
-    predicted_q = value_estimator(encoder(curr_frame))[0].cpu().data.numpy()
-
-    img_real = format_demo_img(to_np(curr_frame[0]), qvals[0], "True Current State")
-    img_recon = format_demo_img(to_np(reconstructed[0]),
-                                predicted_q, "Reconstructed Current")
-    demo_img = np.concatenate([img_real, img_recon], axis=1)
-    filename = 'reconstruction_epoch_{:03d}.png'.format(epoch)
-    imutil.show(demo_img, filename=filename)
-
-    generated = generator(sample_z(1, args.latent_size))
-    gen_pred_q = value_estimator(encoder(curr_frame))[0].cpu().data.numpy()
-    gen_img = format_demo_img(to_np(generated[0]), gen_pred_q, 'Generated Image')
-    filename = 'generated_epoch_{:03d}.png'.format(epoch)
-    imutil.show(gen_img, filename=filename)
-
-
-
-    # Generate predicted next frames
-    encoded = encoder(curr_frame)
-    predicted_successors = predictor(encoded)
-    known_idx = masks.max(dim=1)[1]
-    indices = known_idx.view(-1,1,1).expand(args.batch_size,1,args.latent_size)
-    predicted_latent_points = predicted_successors.gather(1, indices)
-    predicted_next_frame = generator(predicted_latent_points)
-
-    # Visualize side-by-side true outcomes and predicted outcomes
-    img_next_real = format_demo_img(to_np(next_frame[0]), None,
-                                    "True Outcome Action {}".format(known_idx[0]))
-    img_next_pred = format_demo_img(to_np(predicted_next_frame[0]), None,
-                                    "Pred. Outcome Action {}".format(known_idx[0]))
-    demo_img = np.concatenate([img_real, img_recon, img_next_pred, img_next_real], axis=1)
-    filename = 'prediction_epoch_{:03d}.png'.format(epoch)
-    imutil.show(demo_img, filename=filename)
-
-    # TODO: Measure "goodness" of generated images
-
-    # TODO: Measure disentanglement of latent codes
-
-    # TODO: Generate images
-
-    # Test classifier
-    #scores = F.log_softmax(classifier(encoder(data)))
-    #correct = (scores.max(dim=1)[1] == labels).sum()
-    #train_accuracy = float(correct) / len(labels)
-
-    return {
-        'generated_pixel_mean': samples.mean(),
-        'generated_pixel_variance': samples.var(0).mean(),
-        'reconstruction_l2': reconstruction_l2,
-        #'cycle_reconstruction_l2': cycle_reconstruction_l2,
-        #'train_accuracy': train_accuracy,
-    }
-
-
-def make_linear_trajectory():
-    trajectory = []
-    fixed_z = np.random.normal(size=(1, args.latent_size))
-    fixed_zprime = np.random.normal(size=(1, args.latent_size))
-    for i in range(200):
-        theta = abs(i - 100) / 100.
-        z = theta * fixed_z + (1 - theta) * fixed_zprime
-        z /= np.linalg.norm(z)
-        trajectory.append(z)
-    return np.array(trajectory)
 
 
 def make_counterfactual_trajectory(x, target_action, iters=300, initial_speed=0.1,
@@ -376,19 +300,10 @@ def main():
     os.makedirs(args.save_to_dir, exist_ok=True)
     batches_per_epoch = 200
     ts_train = TimeSeries('Training', batches_per_epoch * args.epochs)
-    ts_eval = TimeSeries('Evaluation', args.epochs)
     for epoch in range(args.epochs):
         print('starting epoch {}'.format(epoch))
         train(epoch, ts_train, batches_per_epoch)
         print(ts_train)
-
-        metrics = evaluate(epoch)
-        for key, value in metrics.items():
-            ts_eval.collect(key, value)
-        print(ts_eval)
-
-        make_video('linear_epoch_{:03d}'.format(epoch), make_linear_trajectory(),
-                   whatif='random')
 
         data, _ = next(i for i in test_loader)
         for target_action in range(4):
