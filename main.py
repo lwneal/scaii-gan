@@ -315,18 +315,26 @@ def make_linear_trajectory():
 
 
 def make_counterfactual_trajectory(x, target_action, iters=300, initial_speed=0.1,
-                                   speed_decay=0.99, mu=0.9):
+                                   speed_decay=0.99, mu=0.9, stability_coefficient=1.0):
     trajectory = []
 
     z0 = encoder(x)[0]
     z = z0.clone()
+    original_qvals = value_estimator(z0)
     losses = []
 
     speed = initial_speed
     velocity = torch.zeros(z.size()).to(device)
 
     for i in range(iters):
-        cf_loss = 1 - value_estimator(z)[target_action]
+        cf_loss = 0
+        qvals = value_estimator(z)
+        for class_idx in range(len(qvals)):
+            if class_idx == target_action:
+                cf_loss += (1 - qvals[class_idx]) ** 2
+            else:
+                cf_loss += stability_coefficient * (qvals[class_idx] - original_qvals[class_idx])**2
+
         dc_dz = autograd.grad(cf_loss, z, cf_loss)[0]
         losses.append(float(cf_loss))
 
